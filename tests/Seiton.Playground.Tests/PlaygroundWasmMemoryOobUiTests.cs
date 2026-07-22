@@ -96,8 +96,25 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               - run: npm install && npm test
         """;
 
-    private static readonly string[] IncompleteJobKeys =
-        ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy", "strategy:"];
+    private const string SimpleWorkflowWithCodeMirrorIndentPlaceholder = """
+        # Paste your workflow YAML to this code editor
+
+        on:
+          push:
+            branch: main
+
+        jobs:
+          test:
+          __JOB_KEY__
+            runs-on: ubuntu-latest
+            steps:
+              - run: npm test
+        """;
+
+    private static readonly string[] IncompleteJobKeyPrefixes =
+        ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy"];
+
+    private static readonly string[] IncompleteJobKeys = [.. IncompleteJobKeyPrefixes, "strategy:"];
 
     private const string WorkflowWithStrategyLikeBlockScalar = """
         on: push
@@ -220,7 +237,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
                 "__JOB_KEY__",
                 IncompleteJobKeys[i],
                 StringComparison.Ordinal);
-            var result = await RunLintViaHooksAsync(page, yaml);
+            var result = await RunLintWithinAsync(page, yaml, $"linting '{IncompleteJobKeys[i]}' with job-property indentation");
             if (!result.Ok)
             {
                 failures.Add($"[{i}] '{IncompleteJobKeys[i]}': {result.Error}");
@@ -234,11 +251,33 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             }
         }
 
+        for (var i = 0; i < IncompleteJobKeyPrefixes.Length; i++)
+        {
+            var yaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder.Replace(
+                "__JOB_KEY__",
+                IncompleteJobKeyPrefixes[i],
+                StringComparison.Ordinal);
+            var result = await RunLintWithinAsync(page, yaml, $"linting '{IncompleteJobKeyPrefixes[i]}' with CodeMirror indentation");
+            if (!result.Ok || !result.Deferred)
+            {
+                failures.Add($"CodeMirror indent [{i}] '{IncompleteJobKeyPrefixes[i]}': ok={result.Ok}, deferred={result.Deferred}, error={result.Error}");
+            }
+        }
+
+        var codeMirrorCrlfYaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder
+            .Replace("__JOB_KEY__", "str", StringComparison.Ordinal)
+            .ReplaceLineEndings("\r\n");
+        var codeMirrorCrlfResult = await RunLintWithinAsync(page, codeMirrorCrlfYaml, "linting the CRLF CodeMirror strategy prefix");
+        if (!codeMirrorCrlfResult.Ok || !codeMirrorCrlfResult.Deferred)
+        {
+            failures.Add($"CRLF CodeMirror strategy prefix: ok={codeMirrorCrlfResult.Ok}, deferred={codeMirrorCrlfResult.Deferred}, error={codeMirrorCrlfResult.Error}");
+        }
+
         var malformedCompletedYaml = SimpleWorkflowWithJobKeyPlaceholder.Replace(
             "__JOB_KEY__",
             "strategy:\n      fail-fast: false",
             StringComparison.Ordinal);
-        var malformedCompletedResult = await RunLintViaHooksAsync(page, malformedCompletedYaml);
+        var malformedCompletedResult = await RunLintWithinAsync(page, malformedCompletedYaml, "linting the malformed completed strategy");
         if (!malformedCompletedResult.Ok || !malformedCompletedResult.Deferred)
         {
             failures.Add($"malformed completed strategy: ok={malformedCompletedResult.Ok}, deferred={malformedCompletedResult.Deferred}, error={malformedCompletedResult.Error}");
@@ -246,8 +285,8 @@ public sealed class PlaygroundWasmMemoryOobUiTests
 
         var crlfYaml = SimpleWorkflowWithJobKeyPlaceholder
             .Replace("__JOB_KEY__", "str", StringComparison.Ordinal)
-            .Replace("\n", "\r\n", StringComparison.Ordinal);
-        var crlfResult = await RunLintViaHooksAsync(page, crlfYaml);
+            .ReplaceLineEndings("\r\n");
+        var crlfResult = await RunLintWithinAsync(page, crlfYaml, "linting the CRLF strategy prefix");
         if (!crlfResult.Ok || !crlfResult.Deferred)
         {
             failures.Add($"CRLF strategy prefix: ok={crlfResult.Ok}, deferred={crlfResult.Deferred}, error={crlfResult.Error}");
@@ -257,7 +296,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             "__JOB_KEY__",
             "strategy:\n      fail-fast: false",
             StringComparison.Ordinal);
-        var completedResult = await RunLintViaHooksAsync(page, completedYaml);
+        var completedResult = await RunLintWithinAsync(page, completedYaml, "linting the completed strategy");
         if (!completedResult.Ok || completedResult.Deferred)
         {
             failures.Add($"completed strategy: ok={completedResult.Ok}, deferred={completedResult.Deferred}, error={completedResult.Error}");
@@ -294,6 +333,57 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         var stableUnknownKeyResult = await RunLintViaHooksAsync(page, stableUnknownKeyYaml);
         await Assert.That(stableUnknownKeyResult.Ok).IsTrue().Because(stableUnknownKeyResult.Error ?? "unknown");
         await Assert.That(stableUnknownKeyResult.Deferred).IsFalse();
+
+        var completedSiblingJobYaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder.Replace(
+            "__JOB_KEY__",
+            "strategy:",
+            StringComparison.Ordinal);
+        var completedSiblingJobResult = await RunLintViaHooksAsync(page, completedSiblingJobYaml);
+        await Assert.That(completedSiblingJobResult.Ok).IsTrue().Because(completedSiblingJobResult.Error ?? "unknown");
+        await Assert.That(completedSiblingJobResult.Deferred).IsFalse();
+
+        var shortSiblingJobYaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder.Replace(
+            "__JOB_KEY__",
+            "s:",
+            StringComparison.Ordinal);
+        var shortSiblingJobResult = await RunLintViaHooksAsync(page, shortSiblingJobYaml);
+        await Assert.That(shortSiblingJobResult.Ok).IsTrue().Because(shortSiblingJobResult.Error ?? "unknown");
+        await Assert.That(shortSiblingJobResult.Deferred).IsFalse();
+    }
+
+    [Test]
+    public async Task SelectingSimpleWorkflow_ThenTypingStrategy_KeepsPageResponsive()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        await CompleteWithinAsync(
+            page.SelectOptionAsync("#sample-select", "simple"),
+            "selecting the simple workflow");
+        await Task.Delay(700);
+        await AssertPageResponsiveAsync(page, "linting the simple workflow");
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const cm = document.querySelector('#editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('workflow editor missing');
+              cm.setCursor({ line: 7, ch: cm.getLine(7).length });
+              cm.execCommand('newlineAndIndent');
+              cm.focus();
+            }
+            """);
+
+        foreach (var character in "strategy:")
+        {
+            await CompleteWithinAsync(
+                page.Keyboard.TypeAsync(character.ToString()),
+                $"typing '{character}'");
+            await Task.Delay(700);
+            await AssertPageResponsiveAsync(page, $"linting after '{character}'");
+        }
     }
 
     [Test]
@@ -475,6 +565,22 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             "() => globalThis.__SEITON_PLAYGROUND_TEST__?.getRuntimeAlive?.() !== false");
     }
 
+    private static async Task AssertPageResponsiveAsync(IPage page, string operation)
+    {
+        var heartbeat = page.EvaluateAsync<bool>(
+            "() => globalThis.__SEITON_PLAYGROUND_TEST__?.getRuntimeAlive?.() !== false");
+        await CompleteWithinAsync(heartbeat, operation);
+        await Assert.That(await heartbeat).IsTrue().Because(operation);
+    }
+
+    private static async Task CompleteWithinAsync(Task task, string operation)
+    {
+        var completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
+        await Assert.That((object)completed).IsSameReferenceAs(task)
+            .Because($"the page became unresponsive while {operation}");
+        await task;
+    }
+
     private static async Task<LintHookResult> RunLintViaHooksAsync(IPage page, string yaml)
     {
         return await page.EvaluateAsync<LintHookResult>(
@@ -482,6 +588,13 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             (src) => globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, '.github/workflows/ci.yml')
             """,
             yaml);
+    }
+
+    private static async Task<LintHookResult> RunLintWithinAsync(IPage page, string yaml, string operation)
+    {
+        var lint = RunLintViaHooksAsync(page, yaml);
+        await CompleteWithinAsync(lint, operation);
+        return await lint;
     }
 
     private static async Task<LintHookResult> RunLintAppendingSuffixAsync(IPage page, string suffix)
