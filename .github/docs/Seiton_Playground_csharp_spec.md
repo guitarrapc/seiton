@@ -398,7 +398,7 @@ wwwroot/
 - `RunLint` returns an error-diagnostic JSON array on exception.
 - `ApplyAllFixes` returns the original input text on exception.
 - `ConsoleError` logs to the browser console without re-throwing.
-- JS-side lint scheduling defers calls while the editor contains a bare trailing `- uses:` line (intermediate typing state known to trigger WASM AOT traps).
+- JS-side lint scheduling defers calls while the editor contains a bare trailing `- uses:` line, an incomplete `strategy` job-key prefix, an empty `strategy:` before an existing sibling key, or `strategy:` combined with an unindented `steps` sequence (intermediate typing states known to trap or indefinitely block WASM AOT).
 
 ### 6.2 LintEngine Reuse Is Mandatory
 

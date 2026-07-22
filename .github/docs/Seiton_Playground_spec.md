@@ -134,7 +134,7 @@ Non-functional requirement:
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
 | Staleness check | Lint is skipped when `(source, filePath, configVersion)` triple is identical to the last successful lint |
-| Incomplete `uses` guard | While a line ends with bare `- uses:` (no action ref yet), JS defers `RunLint` to avoid known WASM AOT trap states during intermediate typing |
+| Incomplete YAML guard | While a line ends with bare `- uses:` (no action ref yet), a job key is an incomplete `strategy` prefix or empty `strategy:` before an existing sibling key, or a job combines `strategy:` with an unindented `steps` sequence, the UI defers `RunLint` to avoid known WASM AOT trap states during intermediate typing |
 | Staleness non-update | Internal-error results do not update the staleness cache (allows retry on next keystroke) |
 | Staleness invalidation | File-type change, fix application, URL fetch, and config change clear the staleness cache |
 

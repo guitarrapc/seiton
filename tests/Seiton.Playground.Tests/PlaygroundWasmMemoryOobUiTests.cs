@@ -56,6 +56,60 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               - run: npm install && npm test
         """;
 
+    private const string SimpleWorkflowWithJobKeyPlaceholder = """
+        # Paste your workflow YAML to this code editor
+
+        on:
+          push:
+            branch: main
+
+        jobs:
+          test:
+            __JOB_KEY__
+            runs-on: ubuntu-latest
+            steps:
+        - uses: actions/checkout@v6
+        - uses: actions/cache@v4
+          with:
+          path: ~/.npm
+          key: ubuntu-node-${{ hashFiles('**/package-lock.json') }}
+        - run: npm install && npm test
+        """;
+
+    private const string ValidSimpleWorkflowWithJobKeyPlaceholder = """
+        # Paste your workflow YAML to this code editor
+
+        on:
+          push:
+            branch: main
+
+        jobs:
+          test:
+            __JOB_KEY__
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v6
+              - uses: actions/cache@v4
+                with:
+                  path: ~/.npm
+                  key: ubuntu-node-${{ hashFiles('**/package-lock.json') }}
+              - run: npm install && npm test
+        """;
+
+    private static readonly string[] IncompleteJobKeys =
+        ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy", "strategy:"];
+
+    private const string WorkflowWithStrategyLikeBlockScalar = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-24.04
+            steps:
+              - run: |
+                  strategy
+                  runs-on:
+        """;
+
     /// <summary>Must align with step list indent in <see cref="DefaultWorkflowBody"/> (6 spaces before <c>-</c>).</summary>
     private const string TrailingStepSuffix = """
 
@@ -149,6 +203,132 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         var linted = await RunLintViaHooksAsync(page, baseYaml + "      - uses: actions/checkout@v4");
         await Assert.That(linted.Ok).IsTrue().Because(linted.Error ?? "unknown");
         await Assert.That(linted.Deferred).IsFalse();
+    }
+
+    [Test]
+    public async Task WasmLint_IncompleteJobKeysBeforeFollowingProperties_DoNotHang()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        var failures = new List<string>();
+        for (var i = 0; i < IncompleteJobKeys.Length; i++)
+        {
+            var yaml = SimpleWorkflowWithJobKeyPlaceholder.Replace(
+                "__JOB_KEY__",
+                IncompleteJobKeys[i],
+                StringComparison.Ordinal);
+            var result = await RunLintViaHooksAsync(page, yaml);
+            if (!result.Ok)
+            {
+                failures.Add($"[{i}] '{IncompleteJobKeys[i]}': {result.Error}");
+            }
+            else
+            {
+                if (!result.Deferred)
+                {
+                    failures.Add($"[{i}] '{IncompleteJobKeys[i]}': lint was not deferred");
+                }
+            }
+        }
+
+        var malformedCompletedYaml = SimpleWorkflowWithJobKeyPlaceholder.Replace(
+            "__JOB_KEY__",
+            "strategy:\n      fail-fast: false",
+            StringComparison.Ordinal);
+        var malformedCompletedResult = await RunLintViaHooksAsync(page, malformedCompletedYaml);
+        if (!malformedCompletedResult.Ok || !malformedCompletedResult.Deferred)
+        {
+            failures.Add($"malformed completed strategy: ok={malformedCompletedResult.Ok}, deferred={malformedCompletedResult.Deferred}, error={malformedCompletedResult.Error}");
+        }
+
+        var crlfYaml = SimpleWorkflowWithJobKeyPlaceholder
+            .Replace("__JOB_KEY__", "str", StringComparison.Ordinal)
+            .Replace("\n", "\r\n", StringComparison.Ordinal);
+        var crlfResult = await RunLintViaHooksAsync(page, crlfYaml);
+        if (!crlfResult.Ok || !crlfResult.Deferred)
+        {
+            failures.Add($"CRLF strategy prefix: ok={crlfResult.Ok}, deferred={crlfResult.Deferred}, error={crlfResult.Error}");
+        }
+
+        var completedYaml = ValidSimpleWorkflowWithJobKeyPlaceholder.Replace(
+            "__JOB_KEY__",
+            "strategy:\n      fail-fast: false",
+            StringComparison.Ordinal);
+        var completedResult = await RunLintViaHooksAsync(page, completedYaml);
+        if (!completedResult.Ok || completedResult.Deferred)
+        {
+            failures.Add($"completed strategy: ok={completedResult.Ok}, deferred={completedResult.Deferred}, error={completedResult.Error}");
+        }
+
+        await Assert.That(failures).IsEmpty()
+            .Because($"WASM RunLint failures:\n{string.Join('\n', failures)}");
+    }
+
+    [Test]
+    public async Task WasmLint_StableStrategyLikeInputs_AreNotDeferred()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        var unknownKeyYaml = ValidSimpleWorkflowWithJobKeyPlaceholder.Replace(
+            "__JOB_KEY__",
+            "s:",
+            StringComparison.Ordinal);
+        var unknownKeyResult = await RunLintViaHooksAsync(page, unknownKeyYaml);
+        await Assert.That(unknownKeyResult.Ok).IsTrue().Because(unknownKeyResult.Error ?? "unknown");
+        await Assert.That(unknownKeyResult.Deferred).IsFalse();
+
+        var blockScalarResult = await RunLintViaHooksAsync(page, WorkflowWithStrategyLikeBlockScalar);
+        await Assert.That(blockScalarResult.Ok).IsTrue().Because(blockScalarResult.Error ?? "unknown");
+        await Assert.That(blockScalarResult.Deferred).IsFalse();
+
+        var stableUnknownKeyYaml = ValidSimpleWorkflowWithJobKeyPlaceholder.Replace(
+            "__JOB_KEY__",
+            "strategyx:",
+            StringComparison.Ordinal);
+        var stableUnknownKeyResult = await RunLintViaHooksAsync(page, stableUnknownKeyYaml);
+        await Assert.That(stableUnknownKeyResult.Ok).IsTrue().Because(stableUnknownKeyResult.Error ?? "unknown");
+        await Assert.That(stableUnknownKeyResult.Deferred).IsFalse();
+    }
+
+    [Test]
+    public async Task TypingStrategyInSimpleWorkflow_DoesNotFreezeEditor()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        var baseYaml = ValidSimpleWorkflowWithJobKeyPlaceholder.Replace(
+            "__JOB_KEY__",
+            string.Empty,
+            StringComparison.Ordinal);
+        await SetEditorValueAsync(page, baseYaml);
+        await page.WaitForTimeoutAsync(700);
+
+        var previousLength = 0;
+        for (var i = 0; i < IncompleteJobKeys.Length; i++)
+        {
+            await ReplaceStrategyLineAsync(page, IncompleteJobKeys[i], previousLength);
+            previousLength = IncompleteJobKeys[i].Length;
+            await page.WaitForTimeoutAsync(700);
+            await Assert.That(await IsRuntimeAliveAsync(page)).IsTrue()
+                .Because($"runtime died after typing '{IncompleteJobKeys[i]}'");
+        }
+
+        await ReplaceStrategyLineAsync(page, "strategy:\n      fail-fast: false", previousLength);
+        await page.WaitForTimeoutAsync(700);
+        await Assert.That(await IsRuntimeAliveAsync(page)).IsTrue();
+
+        var completedYaml = await GetEditorWorkflowBaseAsync(page);
+        var completedResult = await RunLintViaHooksAsync(page, completedYaml);
+        await Assert.That(completedResult.Ok).IsTrue().Because(completedResult.Error ?? "unknown");
+        await Assert.That(completedResult.Deferred).IsFalse();
     }
 
     [Test]
@@ -257,6 +437,42 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               return cm.getValue();
             }
             """);
+    }
+
+    private static async Task SetEditorValueAsync(IPage page, string yaml)
+    {
+        await page.EvaluateAsync(
+            """
+            (source) => {
+              const cm = document.querySelector('#editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('workflow editor missing');
+              cm.setValue(source);
+            }
+            """,
+            yaml);
+    }
+
+    private static async Task ReplaceStrategyLineAsync(IPage page, string fragment, int previousLength)
+    {
+        await page.EvaluateAsync(
+            """
+            ({ fragment, previousLength }) => {
+              const cm = document.querySelector('#editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('workflow editor missing');
+              cm.replaceRange(
+                fragment,
+                { line: 8, ch: 4 },
+                { line: 8, ch: 4 + previousLength },
+                '+input');
+            }
+            """,
+            new { fragment, previousLength });
+    }
+
+    private static async Task<bool> IsRuntimeAliveAsync(IPage page)
+    {
+        return await page.EvaluateAsync<bool>(
+            "() => globalThis.__SEITON_PLAYGROUND_TEST__?.getRuntimeAlive?.() !== false");
     }
 
     private static async Task<LintHookResult> RunLintViaHooksAsync(IPage page, string yaml)
