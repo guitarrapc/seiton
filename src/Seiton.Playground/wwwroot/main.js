@@ -2258,9 +2258,14 @@ function shouldDeferWasmLintForIncompleteYaml(source) {
   }
 
   // A bare prefix of `strategy` immediately after a mapping parent and before an
-  // existing sibling job key makes the YAML reader consume an unstable mapping
-  // shape. Require the parent line so block-scalar contents are not misclassified.
-  return /(?:^|\n)([ \t]*)[A-Za-z0-9_.-]+:[ \t]*\r?\n(\1[ \t]+)(?:s|st|str|stra|strat|strate|strateg|strategy:?)[ \t]*\r?\n\2(?:concurrency|container|continue-on-error|defaults|env|environment|if|name|needs|outputs|permissions|runs-on|secrets|services|snapshot|steps|timeout-minutes|uses|with):/m.test(source);
+  // existing child key makes the YAML reader consume an unstable mapping shape.
+  // CodeMirror keeps the parent's indentation after Enter, so cover both that
+  // physical typing state and a manually indented job-property line.
+  if (/(?:^|\n)([ \t]*)[A-Za-z0-9_.-]+:[ \t]*\r?\n(\1[ \t]+)(?:s|st|str|stra|strat|strate|strateg|strategy:?)[ \t]*\r?\n\2(?:concurrency|container|continue-on-error|defaults|env|environment|if|name|needs|outputs|permissions|runs-on|secrets|services|snapshot|steps|timeout-minutes|uses|with):/m.test(source)) {
+    return true;
+  }
+
+  return /(?:^|\n)([ \t]*)[A-Za-z0-9_.-]+:[ \t]*\r?\n\1(?:s|st|str|stra|strat|strate|strateg|strategy)[ \t]*\r?\n\1[ \t]+(?:concurrency|container|continue-on-error|defaults|env|environment|if|name|needs|outputs|permissions|runs-on|secrets|services|snapshot|steps|timeout-minutes|uses|with):/m.test(source);
 }
 
 /**
