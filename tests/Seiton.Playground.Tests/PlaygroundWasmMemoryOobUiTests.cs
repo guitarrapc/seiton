@@ -202,7 +202,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
-    public async Task WasmLint_BareUsesLine_IsDeferred_AndCompletedUsesIsLinted()
+    public async Task WasmLint_BareUsesLine_AndCompletedUses_AreLinted()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
@@ -212,14 +212,56 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         await ApplyFullFixConfigViaHooksAsync(page);
         var baseYaml = await GetEditorWorkflowBaseAsync(page);
 
-        var deferred = await RunLintViaHooksAsync(page, baseYaml + "      - uses:");
-        await Assert.That(deferred.Ok).IsTrue().Because(deferred.Error ?? "unknown");
-        await Assert.That(deferred.Deferred).IsTrue();
-        await Assert.That(deferred.Diagnostics ?? []).Count().IsEqualTo(0);
+        var incomplete = await RunLintViaHooksAsync(page, baseYaml + "      - uses:");
+        await Assert.That(incomplete.Ok).IsTrue().Because(incomplete.Error ?? "unknown");
+        await Assert.That(incomplete.Deferred).IsFalse();
 
         var linted = await RunLintViaHooksAsync(page, baseYaml + "      - uses: actions/checkout@v4");
         await Assert.That(linted.Ok).IsTrue().Because(linted.Error ?? "unknown");
         await Assert.That(linted.Deferred).IsFalse();
+    }
+
+    [Test]
+    public async Task WasmLint_RawCodeMirrorIntermediateYaml_Completes()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var yaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder.Replace(
+            "__JOB_KEY__",
+            "s",
+            StringComparison.Ordinal);
+        var lint = RunLintViaHooksAsync(page, yaml);
+        await CompleteWithinAsync(lint, "linting the raw CodeMirror intermediate YAML");
+
+        var result = await lint;
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
+    }
+
+    [Test]
+    public async Task WasmLint_ActionMetadataPath_StillSelectsActionParser()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var result = await page.EvaluateAsync<LintHookResult>(
+            """
+            (src) => globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, 'action.yml')
+            """,
+            """
+            name: Composite action
+            description: Test action
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """);
+
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
+        await Assert.That(result.Diagnostics ?? []).IsEmpty();
     }
 
     [Test]
@@ -244,9 +286,9 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             }
             else
             {
-                if (!result.Deferred)
+                if (result.Deferred)
                 {
-                    failures.Add($"[{i}] '{IncompleteJobKeys[i]}': lint was not deferred");
+                    failures.Add($"[{i}] '{IncompleteJobKeys[i]}': lint was deferred");
                 }
             }
         }
@@ -258,7 +300,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
                 IncompleteJobKeyPrefixes[i],
                 StringComparison.Ordinal);
             var result = await RunLintWithinAsync(page, yaml, $"linting '{IncompleteJobKeyPrefixes[i]}' with CodeMirror indentation");
-            if (!result.Ok || !result.Deferred)
+            if (!result.Ok || result.Deferred)
             {
                 failures.Add($"CodeMirror indent [{i}] '{IncompleteJobKeyPrefixes[i]}': ok={result.Ok}, deferred={result.Deferred}, error={result.Error}");
             }
@@ -268,7 +310,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             .Replace("__JOB_KEY__", "str", StringComparison.Ordinal)
             .ReplaceLineEndings("\r\n");
         var codeMirrorCrlfResult = await RunLintWithinAsync(page, codeMirrorCrlfYaml, "linting the CRLF CodeMirror strategy prefix");
-        if (!codeMirrorCrlfResult.Ok || !codeMirrorCrlfResult.Deferred)
+        if (!codeMirrorCrlfResult.Ok || codeMirrorCrlfResult.Deferred)
         {
             failures.Add($"CRLF CodeMirror strategy prefix: ok={codeMirrorCrlfResult.Ok}, deferred={codeMirrorCrlfResult.Deferred}, error={codeMirrorCrlfResult.Error}");
         }
@@ -278,7 +320,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             "strategy:\n      fail-fast: false",
             StringComparison.Ordinal);
         var malformedCompletedResult = await RunLintWithinAsync(page, malformedCompletedYaml, "linting the malformed completed strategy");
-        if (!malformedCompletedResult.Ok || !malformedCompletedResult.Deferred)
+        if (!malformedCompletedResult.Ok || malformedCompletedResult.Deferred)
         {
             failures.Add($"malformed completed strategy: ok={malformedCompletedResult.Ok}, deferred={malformedCompletedResult.Deferred}, error={malformedCompletedResult.Error}");
         }
@@ -287,7 +329,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             .Replace("__JOB_KEY__", "str", StringComparison.Ordinal)
             .ReplaceLineEndings("\r\n");
         var crlfResult = await RunLintWithinAsync(page, crlfYaml, "linting the CRLF strategy prefix");
-        if (!crlfResult.Ok || !crlfResult.Deferred)
+        if (!crlfResult.Ok || crlfResult.Deferred)
         {
             failures.Add($"CRLF strategy prefix: ok={crlfResult.Ok}, deferred={crlfResult.Deferred}, error={crlfResult.Error}");
         }

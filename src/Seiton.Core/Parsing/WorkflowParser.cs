@@ -75,23 +75,29 @@ public static partial class WorkflowParser
             var hasHints = false;
             var hasJobs = false;
             var hasRuns = false;
-            try
+            // The Playground's document selector already provides the parse mode. Avoid the
+            // structural-hint pre-pass in browser WASM: skipping a malformed subtree can make
+            // VYaml's AOT parser stop making progress while the real parser handles it safely.
+            if (!OperatingSystem.IsBrowser())
             {
-                var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
                 try
                 {
-                    hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
+                    var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+                    try
+                    {
+                        hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
+                    }
+                    finally
+                    {
+                        hintReader.Dispose();
+                    }
                 }
-                finally
+                catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
                 {
-                    hintReader.Dispose();
+                    hasHints = false;
+                    hasJobs = false;
+                    hasRuns = false;
                 }
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
-            {
-                hasHints = false;
-                hasJobs = false;
-                hasRuns = false;
             }
 
             var finalKind = hasHints

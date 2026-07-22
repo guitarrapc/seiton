@@ -398,7 +398,8 @@ wwwroot/
 - `RunLint` returns an error-diagnostic JSON array on exception.
 - `ApplyAllFixes` returns the original input text on exception.
 - `ConsoleError` logs to the browser console without re-throwing.
-- JS-side lint scheduling defers calls while the editor contains a bare trailing `- uses:` line, an incomplete `strategy` job-key prefix before an existing child/sibling key, an empty `strategy:` before an existing sibling key, or `strategy:` combined with an unindented `steps` sequence (intermediate typing states known to trap or indefinitely block WASM AOT). CodeMirror retains the mapping parent's indentation after Enter, so the guard must cover that physical input shape as well as already-indented job properties.
+- Browser parsing omits the structural-hint pre-pass and uses the document selector's path hint (action metadata) or workflow default. This keeps linting to one VYaml traversal: VYaml's AOT reader can stop making progress when a skip-only pre-pass traverses an incomplete mapping, while the real parser recovers from the same editor state.
+- JS sends every debounced editor state to WASM; there are no keyword- or syntax-specific defer rules.
 
 ### 6.2 LintEngine Reuse Is Mandatory
 
