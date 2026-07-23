@@ -61,6 +61,8 @@ Normative path hints (fast candidate stage):
 
 Workflow-path hints are optional optimization only. Final kind is always structure-derived.
 
+Browser WASM is the exception: the Playground's explicit document selection is authoritative, so the parser omits the structural-hint pre-pass and performs one kind-specific traversal. An action-metadata selection supplies an action-metadata path hint; other selections use workflow mode. This prevents a skip-only VYaml traversal from blocking on transient, incomplete editor input.
+
 ### 1.1.1 Supported Scope and Reference Parity
 
 This document defines Seiton's formal parser contract.

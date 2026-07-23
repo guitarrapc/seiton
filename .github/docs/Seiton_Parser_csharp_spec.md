@@ -379,6 +379,8 @@ Normative structural hints for finalization:
 
 Final kind is confirmed from top-level structure; structure has priority over path hint on conflict.
 
+For browser WASM, `ParseClassified` omits `TryReadRootStructuralHints` and uses the Playground-selected path hint (action metadata) or the workflow default. The normal parser traversal remains responsible for diagnostics. This avoids parsing each keystroke twice and prevents VYaml's skip-only traversal from entering a non-progressing AOT state on incomplete block mappings.
+
 ### 1.0.2 Action Metadata Parsing (Spec §2.16)
 
 When `ParseClassified` resolves the document kind to action-metadata, the parser enters action-metadata mode and parses:

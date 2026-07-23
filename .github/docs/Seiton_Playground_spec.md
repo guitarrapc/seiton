@@ -119,7 +119,7 @@ Non-functional requirement:
 - Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
 - The Flow-only API caches by YAML content hash and path. Interactive tab calls do not issue a second Flow interop request after linting.
 - The UI records its flow staleness key only after a non-error response can be rendered; backend errors and unavailable graph dependencies remain retryable without editing the YAML.
-- While a trailing bare `- uses:` is incomplete, the UI defers the WASM call and clears the previous graph so stale workflow structure is never presented as current.
+- Intermediate YAML is passed to the WASM parser; Flow renders the parser's current partial/error result rather than retaining stale workflow structure.
 
 ---
 
@@ -134,7 +134,7 @@ Non-functional requirement:
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
 | Staleness check | Lint is skipped when `(source, filePath, configVersion)` triple is identical to the last successful lint |
-| Incomplete YAML guard | While a line ends with bare `- uses:` (no action ref yet), a job key is an incomplete `strategy` prefix before an existing child/sibling key (including the parent's indentation retained by CodeMirror after Enter) or empty `strategy:` before an existing sibling key, or a job combines `strategy:` with an unindented `steps` sequence, the UI defers `RunLint` to avoid known WASM AOT trap states during intermediate typing |
+| Intermediate YAML | Every debounced editor state is linted, including incomplete mapping keys and values; the UI does not maintain syntax-specific defer rules |
 | Staleness non-update | Internal-error results do not update the staleness cache (allows retry on next keystroke) |
 | Staleness invalidation | File-type change, fix application, URL fetch, and config change clear the staleness cache |
 

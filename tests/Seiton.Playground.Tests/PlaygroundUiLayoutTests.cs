@@ -1256,7 +1256,7 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
-    public async Task FlowTab_IncompleteUses_ClearsStaleGraph()
+    public async Task FlowTab_IncompleteUses_RendersCurrentPartialWorkflow()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
@@ -1287,8 +1287,8 @@ public sealed class PlaygroundUiLayoutTests
             """);
         await page.WaitForTimeoutAsync(700);
 
-        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(0);
-        await Assert.That(await page.Locator("#flow-empty").IsVisibleAsync()).IsTrue();
+        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(1);
+        await Assert.That(await page.Locator("#flow-empty").IsVisibleAsync()).IsFalse();
     }
 
     /// <summary>
