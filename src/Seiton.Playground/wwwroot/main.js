@@ -2260,6 +2260,12 @@ function installTestHooksIfRequested() {
         return { diagnostics: diags };
       },
       getConfigVersion: () => configVersion,
+      isCurrentEditorLinted: () => debounceId === null
+        && !lintInProgress
+        && !lintPendingRetry
+        && lastLintedSource === editor.getValue()
+        && lastLintedFilePath === getSelectedFilePath()
+        && lastConfigVersion === configVersion,
       renderDiagnostics: (diagnostics) => renderResults(diagnostics ?? []),
       shouldCollapseDiagMessage,
       getRuntimeAlive: () => runtimeAlive,

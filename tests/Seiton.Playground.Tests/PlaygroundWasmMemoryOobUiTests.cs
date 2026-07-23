@@ -143,6 +143,35 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               macos-latest: "macos-15"
         """;
 
+    private const string IncrementalWorkflowPrefix = "# Paste your workflow YAML to this code editor\n\non:\n  push:\n\n";
+
+    private static readonly (string Input, string ExpectedSuffix)[] IncrementalWorkflowCheckpoints =
+    [
+        ("j", "j"),
+        ("ob", "job"),
+        ("s:", "jobs:"),
+        ("\n", "jobs:\n"),
+        ("  ", "jobs:\n  "),
+        ("t", "jobs:\n  t"),
+        ("est:", "jobs:\n  test:"),
+        ("\n", "jobs:\n  test:\n  "),
+        ("  ", "jobs:\n  test:\n    "),
+        ("r", "jobs:\n  test:\n    r"),
+        ("uns-on:", "jobs:\n  test:\n    runs-on:"),
+        (" ubuntu-latest", "runs-on: ubuntu-latest"),
+        ("\n", "runs-on: ubuntu-latest\n    "),
+        ("s", "runs-on: ubuntu-latest\n    s"),
+        ("tep", "runs-on: ubuntu-latest\n    step"),
+        ("s:", "runs-on: ubuntu-latest\n    steps:"),
+        ("\n", "steps:\n    "),
+        ("  ", "steps:\n      "),
+        ("-", "steps:\n      -"),
+        (" u", "steps:\n      - u"),
+        ("ses", "steps:\n      - uses"),
+        (":", "steps:\n      - uses:"),
+        (" actions/checkout@v6", "- uses: actions/checkout@v6"),
+    ];
+
     private static readonly string[] IncompleteJobKeyPrefixes =
         ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy"];
 
@@ -219,6 +248,70 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         var toast = await page.Locator("#toast-stack").TextContentAsync() ?? string.Empty;
         await Assert.That(fixedYaml).Contains("runs-on: ubuntu-24.04").Because(toast);
         await Assert.That(fixedYaml).Contains("timeout-minutes: 15").Because(toast);
+    }
+
+    [Test]
+    public async Task TypingMinimalWorkflowThroughIncompleteCheckpoints_KeepsLintAndEditorResponsive()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var runtimeErrors = new List<string>();
+        var pageErrors = new List<string>();
+        page.Console += (_, message) =>
+        {
+            if (IsRuntimeFailure(message.Text))
+            {
+                runtimeErrors.Add(message.Text);
+            }
+        };
+        page.PageError += (_, error) => pageErrors.Add(error);
+
+        await SetEditorValueAsync(page, IncrementalWorkflowPrefix);
+        await page.EvaluateAsync(
+            """
+            () => {
+              const cm = document.querySelector('#editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('workflow editor missing');
+              cm.setCursor(cm.lineCount() - 1, 0);
+              cm.focus();
+            }
+            """);
+        await WaitForCurrentEditorLintAsync(page, "linting the initial incomplete workflow");
+
+        foreach (var (input, expectedSuffix) in IncrementalWorkflowCheckpoints)
+        {
+            if (input == "\n")
+            {
+                await CompleteWithinAsync(page.Keyboard.PressAsync("Enter"), "typing a newline");
+            }
+            else
+            {
+                await CompleteWithinAsync(page.Keyboard.TypeAsync(input), $"typing '{input}'");
+            }
+
+            await WaitForCurrentEditorLintAsync(page, $"linting after '{EscapeForMessage(input)}'");
+            var editorValue = await GetEditorWorkflowBaseAsync(page);
+            await Assert.That(editorValue).EndsWith(expectedSuffix)
+                .Because($"unexpected editor content after '{EscapeForMessage(input)}'");
+        }
+
+        await CompleteWithinAsync(page.Keyboard.PressAsync("Backspace"), "deleting the action version");
+        await CompleteWithinAsync(page.Keyboard.PressAsync("Backspace"), "deleting the action version");
+        await CompleteWithinAsync(page.Keyboard.PressAsync("Backspace"), "deleting the action version");
+        await WaitForCurrentEditorLintAsync(page, "linting the incomplete action after deletion");
+        await Assert.That(await GetEditorWorkflowBaseAsync(page)).EndsWith("- uses: actions/checkout");
+
+        await CompleteWithinAsync(page.Keyboard.TypeAsync("@v6"), "retyping the action version");
+        await WaitForCurrentEditorLintAsync(page, "linting the completed action after retyping");
+
+        var finalYaml = await GetEditorWorkflowBaseAsync(page);
+        await Assert.That(finalYaml).EndsWith("- uses: actions/checkout@v6");
+        await Assert.That(runtimeErrors).IsEmpty();
+        await Assert.That(pageErrors).IsEmpty();
+        await Assert.That(await page.Locator("#toast-stack .toast--error").CountAsync()).IsEqualTo(0);
+        await Assert.That(await IsRuntimeAliveAsync(page)).IsTrue();
     }
 
     [Test]
@@ -794,6 +887,26 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         await CompleteWithinAsync(heartbeat, operation);
         await Assert.That(await heartbeat).IsTrue().Because(operation);
     }
+
+    private static async Task WaitForCurrentEditorLintAsync(IPage page, string operation)
+    {
+        var wait = page.WaitForFunctionAsync(
+            "() => globalThis.__SEITON_PLAYGROUND_TEST__?.isCurrentEditorLinted?.() === true",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await CompleteWithinAsync(wait, operation);
+    }
+
+    private static bool IsRuntimeFailure(string message)
+        => message.Contains("memory access out of bounds", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("out of memory", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("allocation failed", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("runtime already exited", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("cannot enlarge memory arrays", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("abort(", StringComparison.OrdinalIgnoreCase);
+
+    private static string EscapeForMessage(string input)
+        => input.Replace("\n", "\\n", StringComparison.Ordinal);
 
     private static async Task CompleteWithinAsync(Task task, string operation)
     {
