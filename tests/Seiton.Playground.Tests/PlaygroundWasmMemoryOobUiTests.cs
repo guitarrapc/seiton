@@ -222,7 +222,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
-    public async Task WasmLint_RawCodeMirrorIntermediateYaml_Completes()
+    public async Task WasmLint_ArbitraryCodeMirrorIntermediateYaml_Completes()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
@@ -230,10 +230,82 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
         var yaml = SimpleWorkflowWithCodeMirrorIndentPlaceholder.Replace(
             "__JOB_KEY__",
-            "s",
+            "arbitrary",
             StringComparison.Ordinal);
         var lint = RunLintViaHooksAsync(page, yaml);
         await CompleteWithinAsync(lint, "linting the raw CodeMirror intermediate YAML");
+
+        var result = await lint;
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
+    }
+
+    [Test]
+    [Arguments(
+        "root mapping",
+        "on: push\narbitrary\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps: []\n")]
+    [Arguments(
+        "job mapping",
+        "on: push\njobs:\n  test:\n    arbitrary\n    runs-on: ubuntu-latest\n    steps: []\n")]
+    [Arguments(
+        "env mapping",
+        "on: push\nenv:\n  FIRST:\n  arbitrary\n    child: value\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps: []\n")]
+    [Arguments(
+        "step mapping",
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - arbitrary\n        run: echo ok\n")]
+    [Arguments(
+        "with mapping",
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          input:\n          arbitrary\n            child: value\n")]
+    public async Task WasmLint_NonStrategyIntermediateYaml_Completes(string caseName, string yaml)
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var lint = RunLintViaHooksAsync(page, yaml);
+        await CompleteWithinAsync(lint, $"linting an incomplete {caseName}");
+
+        var result = await lint;
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
+    }
+
+    [Test]
+    public async Task WasmFlowAndMermaid_NonStrategyIntermediateYaml_Complete()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var render = page.EvaluateAsync<bool>(
+            """
+            (src) => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              return hooks.getFlow(src, '.github/workflows/ci.yml').ok
+                && hooks.getMermaid(src, '.github/workflows/ci.yml').ok;
+            }
+            """,
+            "on: push\njobs:\n  test:\n    arbitrary\n    runs-on: ubuntu-latest\n    steps: []\n");
+        await CompleteWithinAsync(render, "rendering Flow and Mermaid for non-strategy intermediate YAML");
+        await Assert.That(await render).IsTrue();
+    }
+
+    [Test]
+    [Arguments(
+        "unknown root key",
+        "unknown:\n  item:\n  partial\n    child: value\non: push\njobs: {}\n")]
+    [Arguments(
+        "unknown job key",
+        "on: push\njobs:\n  test:\n    mystery:\n      item:\n      partial\n        child: value\n    runs-on: ubuntu-latest\n    steps: []\n")]
+    [Arguments(
+        "unknown step key",
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - mystery:\n          item:\n          partial\n            child: value\n        run: echo ok\n")]
+    public async Task WasmLint_MalformedUnknownSubtree_Completes(string caseName, string yaml)
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var lint = RunLintViaHooksAsync(page, yaml);
+        await CompleteWithinAsync(lint, $"linting a malformed {caseName}");
 
         var result = await lint;
         await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
@@ -262,6 +334,24 @@ public sealed class PlaygroundWasmMemoryOobUiTests
 
         await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
         await Assert.That(result.Diagnostics ?? []).IsEmpty();
+    }
+
+    [Test]
+    public async Task WasmLint_ActionMetadataIntermediateYaml_Completes()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+        var lint = page.EvaluateAsync<LintHookResult>(
+            """
+            (src) => globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, 'action.yml')
+            """,
+            "name: Test\ndescription: Test action\nruns:\n  using: composite\n  arbitrary\n  steps:\n    - run: echo ok\n      shell: bash\n");
+        await CompleteWithinAsync(lint, "linting incomplete action metadata");
+
+        var result = await lint;
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
     }
 
     [Test]
@@ -394,7 +484,9 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
-    public async Task SelectingSimpleWorkflow_ThenTypingStrategy_KeepsPageResponsive()
+    [Arguments("strategy:")]
+    [Arguments("arbitrary:")]
+    public async Task SelectingSimpleWorkflow_ThenTypingJobText_KeepsPageResponsive(string input)
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
@@ -418,7 +510,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             }
             """);
 
-        foreach (var character in "strategy:")
+        foreach (var character in input)
         {
             await CompleteWithinAsync(
                 page.Keyboard.TypeAsync(character.ToString()),
