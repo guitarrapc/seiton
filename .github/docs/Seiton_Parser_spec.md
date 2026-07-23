@@ -61,7 +61,7 @@ Normative path hints (fast candidate stage):
 
 Workflow-path hints are optional optimization only. Final kind is always structure-derived.
 
-Browser WASM is the exception: the Playground's explicit document selection is authoritative, so the parser omits the structural-hint pre-pass and performs one kind-specific traversal. An action-metadata selection supplies an action-metadata path hint; other selections use workflow mode. This prevents a skip-only VYaml traversal from blocking on transient, incomplete editor input.
+Browser WASM real-time analysis is the exception: the Playground's explicit document selection is authoritative, so continuous lint/flow parsing omits the structural-hint pre-pass and performs one kind-specific traversal. An action-metadata selection supplies an action-metadata path hint; other selections use workflow mode. This prevents a skip-only YAML traversal from blocking on transient, incomplete editor input. Explicit fix operations may use structural finalization because they operate on a stable editor snapshot and require the full fix-capable parse path.
 
 ### 1.1.1 Supported Scope and Reference Parity
 

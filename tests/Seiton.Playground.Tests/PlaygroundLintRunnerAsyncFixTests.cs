@@ -159,6 +159,49 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
     }
 
     [Test]
+    public async Task ApplyAllFixesAsync_WithTimeoutDefaultAndRunnerMapping_AppliesBothOfflineFixes()
+    {
+        const string yaml = """
+            # Paste your workflow YAML to this code editor
+
+            on:
+              push:
+                branches: main
+
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v6
+                  - uses: actions/cache@v4
+                    with:
+                      path: ~/.npm
+                      key: ubuntu-node-${{ hashFiles('**/package-lock.json') }}
+                  - run: npm install && npm test
+            """;
+
+        var configDiagnostics = PlaygroundLintRunner.SetConfig("""
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+
+            rules:
+              runner-no-latest:
+                fix-mapping:
+                  ubuntu-latest: "ubuntu-24.04"
+                  windows-latest: "windows-2025"
+                  macos-latest: "macos-15"
+            """);
+        await Assert.That(configDiagnostics).IsEquivalentTo("[]"u8.ToArray());
+
+        _ = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        var result = await PlaygroundLintRunner.ApplyAllFixesAsync(yaml, ".github/workflows/ci.yml");
+
+        await Assert.That(result.Yaml).Contains("runs-on: ubuntu-24.04");
+        await Assert.That(result.Yaml).Contains("timeout-minutes: 15");
+    }
+
+    [Test]
     public async Task ApplyAllFixesAsync_OfflineFixesAppliedFirst_ThenNetworkFixes()
     {
         // Arrange: YAML that triggers both offline fixes (deny-write-all) AND network fixes (unpinned-uses)

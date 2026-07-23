@@ -563,7 +563,7 @@ public static class PlaygroundLintRunner
         {
             lock (EngineGate)
             {
-                using var result = Engine.Check(current, filePath, ActiveConfig);
+                using var result = Engine.CheckForFixing(current, filePath, ActiveConfig);
                 if (!result.HasFixableDiagnostics)
                 {
                     return Encoding.UTF8.GetString(current);
@@ -618,7 +618,7 @@ public static class PlaygroundLintRunner
         Diagnostic[] diagnostics;
         lock (EngineGate)
         {
-            using var lintResult = Engine.Check(utf8Yaml, filePath, config);
+            using var lintResult = Engine.CheckForFixing(utf8Yaml, filePath, config);
             diagnostics = lintResult.Diagnostics.ToArray();
         }
 

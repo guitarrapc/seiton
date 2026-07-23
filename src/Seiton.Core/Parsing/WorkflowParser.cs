@@ -67,6 +67,16 @@ public static partial class WorkflowParser
     /// <param name="arena">The arena that owns pooled buffers. Caller is responsible for disposal.</param>
     internal static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath, out AstArena? arena)
     {
+        return ParseClassified(utf8Yaml, filePath, readStructuralHints: !OperatingSystem.IsBrowser(), out arena);
+    }
+
+    /// <summary>Parses UTF-8 YAML with explicit control over root structural-hint classification.</summary>
+    internal static ClassifiedParseResult ParseClassified(
+        byte[] utf8Yaml,
+        string filePath,
+        bool readStructuralHints,
+        out AstArena? arena)
+    {
         var pathHintKind = DocumentKindClassifier.GetPathHintKind(filePath);
         AstArena? localArena = null;
 
@@ -75,10 +85,7 @@ public static partial class WorkflowParser
             var hasHints = false;
             var hasJobs = false;
             var hasRuns = false;
-            // The Playground's document selector already provides the parse mode. Avoid the
-            // structural-hint pre-pass in browser WASM: skipping a malformed subtree can make
-            // VYaml's AOT parser stop making progress while the real parser handles it safely.
-            if (!OperatingSystem.IsBrowser())
+            if (readStructuralHints)
             {
                 try
                 {
