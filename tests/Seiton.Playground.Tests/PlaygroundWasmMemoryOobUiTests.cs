@@ -130,6 +130,19 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               - run: npm install && npm test
         """;
 
+    private const string AutoFixConfig = """
+        fix:
+          defaults:
+            job-timeout-minutes: 15
+
+        rules:
+          runner-no-latest:
+            fix-mapping:
+              ubuntu-latest: "ubuntu-24.04"
+              windows-latest: "windows-2025"
+              macos-latest: "macos-15"
+        """;
+
     private static readonly string[] IncompleteJobKeyPrefixes =
         ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy"];
 
@@ -173,32 +186,25 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         await using var context = await browser.NewContextAsync();
         var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
 
-        var configDiagnostics = await page.EvaluateAsync<SetConfigHookResult>(
-            """
-            (cfg) => globalThis.__SEITON_PLAYGROUND_TEST__.setConfig(cfg)
-            """,
-            """
-            fix:
-              defaults:
-                job-timeout-minutes: 15
-
-            rules:
-              runner-no-latest:
-                fix-mapping:
-                  ubuntu-latest: "ubuntu-24.04"
-                  windows-latest: "windows-2025"
-                  macos-latest: "macos-15"
-            """);
-        await Assert.That(configDiagnostics.Diagnostics).IsEmpty();
-
+        var initialConfigVersion = await page.EvaluateAsync<int>(
+            "() => globalThis.__SEITON_PLAYGROUND_TEST__.getConfigVersion()");
+        await SetConfigEditorValueAsync(page, AutoFixConfig);
+        await page.WaitForFunctionAsync(
+            "(version) => globalThis.__SEITON_PLAYGROUND_TEST__.getConfigVersion() > version",
+            initialConfigVersion,
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
         await SetEditorValueAsync(page, AutoFixWorkflow);
-        var lint = await RunLintViaHooksAsync(page, AutoFixWorkflow);
-        await Assert.That(lint.Ok).IsTrue().Because(lint.Error ?? "unknown");
-        var lintJson = await page.EvaluateAsync<string>(
-            "(src) => JSON.stringify(globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, '.github/workflows/ci.yml'))",
-            AutoFixWorkflow);
-        await Assert.That(lintJson).Contains("runner-no-latest");
-        await Assert.That(lintJson).Contains("job-timeout-minutes-required");
+        await page.WaitForFunctionAsync(
+            """
+            () => {
+              const ruleIds = Array.from(document.querySelectorAll('#lint-result-body .rule-chip'),
+                (element) => element.textContent ?? '');
+              return ruleIds.includes('runner-no-latest')
+                && ruleIds.includes('job-timeout-minutes-required');
+            }
+            """,
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
 
         var applyButton = page.Locator("#apply-fixes-btn");
         await applyButton.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 10_000 });
@@ -743,6 +749,19 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             }
             """,
             yaml);
+    }
+
+    private static async Task SetConfigEditorValueAsync(IPage page, string config)
+    {
+        await page.EvaluateAsync(
+            """
+            (source) => {
+              const cm = document.querySelector('#config-editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('config editor missing');
+              cm.setValue(source);
+            }
+            """,
+            config);
     }
 
     private static async Task ReplaceStrategyLineAsync(IPage page, string fragment, int previousLength)

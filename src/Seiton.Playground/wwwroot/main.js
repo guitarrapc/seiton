@@ -2259,6 +2259,7 @@ function installTestHooksIfRequested() {
         const diags = setConfig(configYaml ?? '');
         return { diagnostics: diags };
       },
+      getConfigVersion: () => configVersion,
       renderDiagnostics: (diagnostics) => renderResults(diagnostics ?? []),
       shouldCollapseDiagMessage,
       getRuntimeAlive: () => runtimeAlive,
