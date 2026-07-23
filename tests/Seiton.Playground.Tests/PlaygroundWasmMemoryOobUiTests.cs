@@ -111,6 +111,25 @@ public sealed class PlaygroundWasmMemoryOobUiTests
               - run: npm test
         """;
 
+    private const string AutoFixWorkflow = """
+        # Paste your workflow YAML to this code editor
+
+        on:
+          push:
+            branches: main
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v6
+              - uses: actions/cache@v4
+                with:
+                  path: ~/.npm
+                  key: ubuntu-node-${{ hashFiles('**/package-lock.json') }}
+              - run: npm install && npm test
+        """;
+
     private static readonly string[] IncompleteJobKeyPrefixes =
         ["s", "st", "str", "stra", "strat", "strate", "strateg", "strategy"];
 
@@ -145,6 +164,56 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         "      - uses: guitarrapc/setup-seiton@v1.0.0\n        with:\n          version: ",
         TrailingStepSuffix.TrimStart('\n'),
     ];
+
+    [Test]
+    public async Task ApplyFixes_WithTimeoutDefaultAndRunnerMapping_UpdatesEditor()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        var configDiagnostics = await page.EvaluateAsync<SetConfigHookResult>(
+            """
+            (cfg) => globalThis.__SEITON_PLAYGROUND_TEST__.setConfig(cfg)
+            """,
+            """
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+
+            rules:
+              runner-no-latest:
+                fix-mapping:
+                  ubuntu-latest: "ubuntu-24.04"
+                  windows-latest: "windows-2025"
+                  macos-latest: "macos-15"
+            """);
+        await Assert.That(configDiagnostics.Diagnostics).IsEmpty();
+
+        await SetEditorValueAsync(page, AutoFixWorkflow);
+        var lint = await RunLintViaHooksAsync(page, AutoFixWorkflow);
+        await Assert.That(lint.Ok).IsTrue().Because(lint.Error ?? "unknown");
+        var lintJson = await page.EvaluateAsync<string>(
+            "(src) => JSON.stringify(globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, '.github/workflows/ci.yml'))",
+            AutoFixWorkflow);
+        await Assert.That(lintJson).Contains("runner-no-latest");
+        await Assert.That(lintJson).Contains("job-timeout-minutes-required");
+
+        var applyButton = page.Locator("#apply-fixes-btn");
+        await applyButton.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 10_000 });
+        await applyButton.ClickAsync();
+
+        await page.WaitForFunctionAsync(
+            "() => document.querySelector('#apply-fixes-btn')?.textContent !== 'Fixing…'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
+
+        var fixedYaml = await GetEditorWorkflowBaseAsync(page);
+        var toast = await page.Locator("#toast-stack").TextContentAsync() ?? string.Empty;
+        await Assert.That(fixedYaml).Contains("runs-on: ubuntu-24.04").Because(toast);
+        await Assert.That(fixedYaml).Contains("timeout-minutes: 15").Because(toast);
+    }
 
     [Test]
     public async Task WasmLint_KeystrokeSuffixes_DoNotThrowMemoryOob()

@@ -216,6 +216,7 @@ Every `RunToJsonUtf8` call performs a full parse + full lint. Workflow files use
 - **Network fixes**: Skipped (pinning/digest remediation requires network unavailable in WASM)
 - **One fix per pass**: Picks the highest-priority fixable diagnostic and applies it, then re-lints
 - **Early termination**: If diagnostics contain fixable items but none pass the local applicability filter (e.g., all are network-dependent), returns immediately without iteration
+- **Browser parse boundary**: Explicit fix passes use structural-hint classification, while real-time lint keeps the single-traversal browser path. Native AOT requires this separation: globally enabling the hint pass can hang on incomplete editor mappings, but omitting it from fix passes can expose fixable diagnostics whose edits are not produced.
 
 ### 2.4 PlaygroundDiagnosticDto
 
@@ -398,7 +399,7 @@ wwwroot/
 - `RunLint` returns an error-diagnostic JSON array on exception.
 - `ApplyAllFixes` returns the original input text on exception.
 - `ConsoleError` logs to the browser console without re-throwing.
-- Browser parsing omits the structural-hint pre-pass and uses the document selector's path hint (action metadata) or workflow default. This keeps linting to one VYaml traversal: VYaml's AOT reader can stop making progress when a skip-only pre-pass traverses an incomplete mapping, while the real parser recovers from the same editor state.
+- Real-time browser parsing omits the structural-hint pre-pass and uses the document selector's path hint (action metadata) or workflow default. Explicit fix operations retain the structural-hint path. This keeps each keystroke to one VYaml traversal without degrading fix generation: VYaml's AOT reader can stop making progress when a skip-only pre-pass traverses an incomplete mapping, while omitting the pass from fix execution can produce a silent no-op.
 - JS sends every debounced editor state to WASM; there are no keyword- or syntax-specific defer rules.
 
 ### 6.2 LintEngine Reuse Is Mandatory

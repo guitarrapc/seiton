@@ -162,10 +162,24 @@ public sealed class LintEngine
     /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
     {
+        return Check(utf8Yaml, filePath, config, readStructuralHints: !OperatingSystem.IsBrowser());
+    }
+
+    /// <summary>
+    /// Parses and lints with root structural hints enabled. Intended for explicit fix operations,
+    /// which require the full fix-capable parse path in browser WASM.
+    /// </summary>
+    internal LintResult CheckForFixing(byte[] utf8Yaml, string filePath, LintConfig? config)
+    {
+        return Check(utf8Yaml, filePath, config, readStructuralHints: true);
+    }
+
+    private LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config, bool readStructuralHints)
+    {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
+        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, readStructuralHints, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
         var classification = classifiedParseResult.Classification;
         var documentKind = classification.FinalKind != DocumentKind.Unknown

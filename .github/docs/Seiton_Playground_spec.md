@@ -155,6 +155,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 - If unchanged: show informational toast (no fix was applicable or an error occurred)
 - Network-dependent fixes (pinning via GitHub API, image digest resolution via OCI registries) require `enable-network` in the config; when enabled, resolves SHAs and digests concurrently before applying fixes
 - Uses the currently active config (last successful `SetConfig` result)
+- Real-time analysis omits the browser structural-hint pre-pass for incomplete-input safety; this explicit operation uses the full fix-capable parse path on the editor snapshot
 
 ### 3.4 Config Content-Hash Caching
 
