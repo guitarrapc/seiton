@@ -269,7 +269,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
-    public async Task WasmFlowAndMermaid_NonStrategyIntermediateYaml_Complete()
+    public async Task WasmFlowAndMermaid_NonStrategyIntermediateYaml_Completes()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
