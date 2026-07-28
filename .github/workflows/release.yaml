@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description:
-          "Existing Git tag to release (e.g. v1.0.0). Must already exist on
-          the remote."
+        description: "Existing Git tag to release (e.g. v1.0.0). Must already exist on the remote."
         required: true
         type: string
 
@@ -147,15 +145,13 @@ jobs:
 
       - name: Create archive (Linux/macOS)
         if: ${{ runner.os != 'Windows' }}
-        run: |
-          cd publish
-          tar czf ../${{ matrix.artifact }}.tar.gz *
+        run: tar czf ../${{ matrix.artifact }}.tar.gz *
+        working-directory: publish
 
       - name: Create archive (Windows)
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
-        run: |
-          Compress-Archive -Path publish/* -DestinationPath ${{ matrix.artifact }}.zip
+        run: Compress-Archive -Path publish/* -DestinationPath ${{ matrix.artifact }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
