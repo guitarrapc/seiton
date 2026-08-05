@@ -324,7 +324,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        var relativePath = DecodeAscii(uses);
+        var relativePath = Encoding.UTF8.GetString(uses);
         var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath, relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
@@ -350,17 +350,6 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             AddStepWarning(step, $"local action path '{relativePath}' is missing action.yml or action.yaml", location);
         }
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
     }
 
     private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath, ReadOnlySpan<byte> actionRef)

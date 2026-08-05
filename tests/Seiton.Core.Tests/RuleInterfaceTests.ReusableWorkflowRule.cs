@@ -102,7 +102,7 @@ public sealed partial class RuleInterfaceTests
                 reuse:
                     uses: $/.github/workflows/reuse.yml@main
             """,
-            ["is not following the format"]),
+            ["is not following the format", "$/path/to/workflow.yml"]),
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);

@@ -424,7 +424,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return false;
         }
 
-        var usesStr = DecodeAscii(uses); // Keep forward slashes for display
+        var usesStr = Encoding.UTF8.GetString(uses); // Keep forward slashes for display
         var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr);
         if (string.IsNullOrEmpty(baseDirectory))
         {
@@ -473,14 +473,4 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return false;
     }
 
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
-    }
 }

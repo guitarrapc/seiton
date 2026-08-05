@@ -313,7 +313,7 @@ The current default rule scope in C# is:
 | `background-steps` | Implemented as `VisitJobPost` via `BackgroundStepFlowAnalyzer`: one-pass job step simulation with forward scan on registry miss. Skips jobs without background flow. Attaches `structure-path` metadata for CLI structure snippets. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
-| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers` (repository-root policy when references start with `./.github/`). |
+| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers`; `./`, `../`, and `$/` references are supported, with `$/` always resolved from the repository root. |
 | `action-shell-is-required` | Scoped to action-metadata documents. |
 
 Scope notes:

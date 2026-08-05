@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -126,9 +127,12 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
     private void AddReusableWorkflowUsesFormatError(JobRef job, WorkflowCallRef workflowCall)
     {
         var usesStr = workflowCall.Uses.Decode();
+        var expectedFormats = ActionRefHelpers.IsSelfRepositoryUses(workflowCall.Uses.Value)
+            ? "\"owner/repo/path/to/workflow.yml@ref\", \"./path/to/workflow.yml\", nor \"$/path/to/workflow.yml\""
+            : "\"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"";
         AddJobError(
             job,
-            $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+            $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format {expectedFormats}. see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
             BuildUsesLocation(workflowCall));
     }
 
@@ -380,7 +384,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return false;
         }
 
-        relativePath = DecodeAscii(uses); // Keep forward slashes for display in diagnostics
+        relativePath = Encoding.UTF8.GetString(uses); // Keep forward slashes for display in diagnostics
         var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
@@ -401,17 +405,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
     {
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
     }
 
     private bool ContainsInput(WorkflowCallInputRefMap providedInputs, string requiredInput)
