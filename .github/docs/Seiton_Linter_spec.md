@@ -167,12 +167,12 @@ Column definitions:
 | Rule ID | Default | Network | Required Behavior Summary |
 |---|---|---|---|
 | `job-structure` | ✓ | — | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form or executable form. |
-| `reusable-workflow` | ✓ | — | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs reject incompatible execution keys, and `./` or `$/` same-repository calls validate contracts when statically resolvable. |
+| `reusable-workflow` | ✓ | — | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs reject incompatible execution keys, and `./` or `$/` same-repository calls validate contracts when statically resolvable. The `$/` form must be `$/.github/workflows/{filename}` and is rejected for GHES targets. |
 | `local-action-inputs` | ✓ | — | Validate `./`, `../`, or `$/` local action `with:` inputs against parsed `action.yml`/`action.yaml`: unknown/missing/deprecated inputs, `runs.using` values, deprecated runners, description presence, env constraints, JS entry-point existence, and branding forwarding. |
 | `permissions` | ✓ | — | Validate `permissions` value domain (scalar: `read-all`/`write-all`; scopes: `read`/`write`/`none`). Warn on scalar values recommending explicit per-scope mapping. |
 | `popular-action-inputs` | ✓ | — | Validate known action input names against popular-action metadata. Suggest near-matches via edit distance. |
 | `outdated-action-runner` | ✓ | — | Error when a popular action's `runs.using` runtime is deprecated (catalog-driven, checks against maintained deprecated-runtime set). |
-| `unpinned-uses` | ✓ | — | Warn when remote `uses:` is not pinned to a full commit SHA; accept `$/` self-repository references as implicitly bound to the running commit and validate local action resolvability. |
+| `unpinned-uses` | ✓ | — | Warn when remote `uses:` is not pinned to a full commit SHA; on GitHub.com accept `$/` self-repository references as implicitly bound to the running commit and validate local action resolvability. Reject `$/` for GHES targets and diagnose invalid repository-escaping paths. |
 | `unpinned-image` | ✓ | — | Warn when docker image references are not pinned by digest (`@sha256:<64-hex>`). |
 | `dangerous-triggers` | ✓ | — | Warn when dangerous trigger events are used (built-in set plus additive config). |
 | `job-permissions-required` | ✓ | — | Warn when a job omits explicit `permissions`. Auto-fix infers minimum scopes from known popular actions. Deliberately applies to reusable-workflow call jobs too: the caller-side `permissions` caps the callee's token, so callers declare scopes matched to the callee (strict `{}` default when unknown). |
@@ -257,7 +257,9 @@ This policy applies only to cycle diagnostics. Other `needs-graph` diagnostics (
 
 This applies regardless of whether the analyzed file lives under `.github/workflows/` or `.github/actions/` (composite action metadata). References that do not start with `./.github/` resolve relative to the analyzed file's directory (standard relative-path semantics).
 
-A `uses:` reference beginning with `$/` always resolves from the repository root. The prefix is removed before filesystem lookup, and a path that would escape the repository root is not resolved. Because GitHub binds this syntax to the exact running commit, it is not subject to remote SHA-pinning diagnostics.
+A `uses:` reference beginning with `$/` resolves from the repository root on GitHub.com. The prefix is removed before filesystem lookup. Repository root discovery prefers the nearest Git worktree marker (`.git` directory or file), then falls back to the directory above `/.github/` for standalone workflow inputs. This supports composite actions stored outside `.github/` and avoids treating an unrelated nested `.github` directory as the repository boundary.
+
+Repository-escaping paths are diagnosed rather than silently ignored. Filesystem-backed resolution also rejects a `$/` path that traverses a symbolic link, junction, or other reparse point, because lexical path normalization alone cannot prove containment. Filesystem path caches use the host filesystem's case semantics. Because GitHub.com binds valid `$/` syntax to the exact running commit, it is not subject to remote SHA-pinning diagnostics. When `network.github.ghes-api-url` targets GitHub Enterprise Server, rules report `$/` as unsupported instead.
 
 Rules that perform filesystem-backed local resolution (`unpinned-uses`, `reusable-workflow`, `local-action-inputs`, and resolvers that depend on the same helper) share this base-directory policy.
 

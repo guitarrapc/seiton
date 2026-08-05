@@ -5310,6 +5310,9 @@ public sealed partial class RuleInterfaceTests
         runs:
             using: composite
             steps:
+                - id: prep
+                  run: echo "mode=release" >> $GITHUB_OUTPUT
+                  shell: bash
                 - run: echo '${{ steps.prep.outputs.mode }}'
                   shell: bash
         """;

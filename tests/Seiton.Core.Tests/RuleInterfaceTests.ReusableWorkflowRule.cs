@@ -95,6 +95,33 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ng-self-repository-outside-workflows-directory",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: $/workflows/reuse.yml
+            """,
+            ["is not following the format", "$/.github/workflows/{filename}"]),
+            new RuleCase(
+            "ng-self-repository-workflow-subdirectory",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: $/.github/workflows/nested/reuse.yml
+            """,
+            ["is not following the format", "$/.github/workflows/{filename}"]),
+            new RuleCase(
+            "ng-self-repository-workflow-missing-extension",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: $/.github/workflows/reuse
+            """,
+            ["is not following the format", "$/.github/workflows/{filename}"]),
+            new RuleCase(
             "ng-self-repository-with-ref",
             """
             on: push
@@ -102,10 +129,34 @@ public sealed partial class RuleInterfaceTests
                 reuse:
                     uses: $/.github/workflows/reuse.yml@main
             """,
-            ["is not following the format", "$/path/to/workflow.yml"]),
+            ["is not following the format", "$/.github/workflows/{filename}"]),
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_SelfRepositoryReferenceOnGhes_ReportsUnsupportedSyntax()
+    {
+        var config = new LintConfig
+        {
+            Network = new NetworkConfig
+            {
+                GitHub = new GitHubNetworkConfig { GhesApiUrl = "https://ghes.example.com/api/v3" },
+            },
+        };
+        var yaml = """
+        on: push
+        jobs:
+          reuse:
+            uses: $/.github/workflows/reuse.yml
+        """;
+
+        await AssertRuleCases(
+            new ReusableWorkflowRule(),
+            "reusable-workflow",
+            [new RuleCase("ng-self-repository-ghes", yaml, ["not available on GitHub Enterprise Server"])],
+            config);
     }
 
 

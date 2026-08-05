@@ -10,7 +10,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 {
     private const int LookupHashSetThreshold = 8;
 
-    private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(ActionRefHelpers.FileSystemPathComparer);
 
     public override string Name => "Reusable Workflow Rule";
 
@@ -66,8 +66,19 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         if (ActionRefHelpers.IsLocalReusableWorkflowUses(uses))
         {
+            if (ActionRefHelpers.IsSelfRepositoryUses(uses)
+                && !string.IsNullOrEmpty(Config.Network.GitHub.GhesApiUrl))
+            {
+                AddJobError(
+                    job,
+                    "self-repository references beginning with '$/' are not available on GitHub Enterprise Server",
+                    BuildUsesLocation(workflowCall));
+                return;
+            }
+
             // Local paths must not contain @ref — validate format before contract
-            if (uses.IndexOf((byte)'@') >= 0)
+            if (uses.IndexOf((byte)'@') >= 0
+                || (ActionRefHelpers.IsSelfRepositoryUses(uses) && !IsValidSelfRepositoryWorkflowPath(uses)))
             {
                 AddReusableWorkflowUsesFormatError(job, workflowCall);
                 return;
@@ -128,7 +139,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
     {
         var usesStr = workflowCall.Uses.Decode();
         var expectedFormats = ActionRefHelpers.IsSelfRepositoryUses(workflowCall.Uses.Value)
-            ? "\"owner/repo/path/to/workflow.yml@ref\", \"./path/to/workflow.yml\", nor \"$/path/to/workflow.yml\""
+            ? "\"owner/repo/.github/workflows/{filename}@ref\", \"./.github/workflows/{filename}\", nor \"$/.github/workflows/{filename}\""
             : "\"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"";
         AddJobError(
             job,
@@ -385,7 +396,8 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         }
 
         relativePath = Encoding.UTF8.GetString(uses); // Keep forward slashes for display in diagnostics
-        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath);
+        var repositoryRoot = ActionRefHelpers.IsSelfRepositoryUses(uses) ? Config.GetRepositoryRoot() ?? string.Empty : null;
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath, repositoryRoot);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return false;
@@ -405,6 +417,23 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
     {
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsValidSelfRepositoryWorkflowPath(ReadOnlySpan<byte> uses)
+    {
+        var prefix = "$/.github/workflows/"u8;
+        if (uses.Length <= prefix.Length || !uses.StartsWith(prefix))
+        {
+            return false;
+        }
+
+        var fileName = uses[prefix.Length..];
+        if (fileName.IndexOf((byte)'/') >= 0 || fileName.IndexOf((byte)'\\') >= 0)
+        {
+            return false;
+        }
+
+        return fileName.EndsWith(".yml"u8) || fileName.EndsWith(".yaml"u8);
     }
 
     private bool ContainsInput(WorkflowCallInputRefMap providedInputs, string requiredInput)

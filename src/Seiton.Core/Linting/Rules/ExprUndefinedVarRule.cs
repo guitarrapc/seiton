@@ -28,6 +28,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Reusable fixed-size override arrays to avoid per-job allocation
     private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[5];
     private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[6];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _actionStepScopeOverrides = new (byte[], ExprType)[1];
+    private (byte[] NameUtf8, ExprType Type)[] _activeStepScopeOverrides = null!;
     private bool _hasOverrides;
     private static readonly (byte[] NameUtf8, ExprType Type)[] _emptyOverrides = [];
     private readonly List<Diagnostic> _propertyDiagnostics = new();
@@ -57,6 +59,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
+        _activeStepScopeOverrides = _stepScopeOverrides;
         _currentWorkflow = workflow;
         var assumeEvents = Config.GetRuleConfig(Id)?.AssumeEvents;
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, assumeEvents, Config.Utf8Yaml);
@@ -121,6 +124,40 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         base.VisitActionMetadataPre(metadata);
         _currentWorkflow = default;
         ResetStepOverrideState();
+
+        if (Config.Utf8Yaml is null)
+        {
+            _localActionOutputResolver = null;
+            _localActionOutputResolverFunc = null;
+            _localReusableOutputResolver = null;
+            _localReusableOutputResolverFunc = null;
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(Config.FilePath) && Path.IsPathFullyQualified(Config.FilePath))
+        {
+            _localActionOutputResolver = new LocalActionOutputResolver(Config.FilePath);
+            _localActionOutputResolverFunc = mem => _localActionOutputResolver.ResolveOutputNames(mem.Span);
+        }
+        else
+        {
+            _localActionOutputResolver = null;
+            _localActionOutputResolverFunc = null;
+        }
+
+        _localReusableOutputResolver = null;
+        _localReusableOutputResolverFunc = null;
+
+        PlanStepVisibility(metadata.Runs.Steps);
+        _actionStepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
+            _stepsOverrideProps,
+            _stepVisibilityTimeline,
+            Arena,
+            Config.Utf8Yaml,
+            maxStepIndex: 0,
+            _localActionOutputResolverFunc);
+        _activeStepScopeOverrides = _actionStepScopeOverrides;
+        _hasOverrides = true;
     }
 
     public override void VisitEvent(EventRef ev)
@@ -440,7 +477,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             else if (visibleBeforeCount < _stepsOverrideBuiltCount)
             {
                 // Defensive: only reachable if visit order ever diverges from timeline order.
-                _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
+                _activeStepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
                     _stepsOverrideProps, _stepVisibilityTimeline, Arena, Config.Utf8Yaml, maxStepIndex: visibleBeforeCount, _localActionOutputResolverFunc);
                 _stepsOverrideBuiltCount = visibleBeforeCount;
             }
@@ -708,7 +745,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         // Validate property access against context types (with dynamic overrides when available)
         var overrides = _hasOverrides
-            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
+            ? (Availability.IsStepLevel(context) ? _activeStepScopeOverrides : _jobScopeOverrides)
             : _emptyOverrides;
 
         var propertyDiagnostics = _propertyDiagnostics;
@@ -924,7 +961,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
         else if (_hasOverrides)
         {
-            var overrides = Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides;
+            var overrides = Availability.IsStepLevel(context) ? _activeStepScopeOverrides : _jobScopeOverrides;
             diag = ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides(parseResult, expression, location, overrides);
         }
         else
@@ -968,7 +1005,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var overrides = _hasOverrides
-            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
+            ? (Availability.IsStepLevel(context) ? _activeStepScopeOverrides : _jobScopeOverrides)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckEnvMappingType(
@@ -1013,7 +1050,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var overrides = _hasOverrides
-            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
+            ? (Availability.IsStepLevel(context) ? _activeStepScopeOverrides : _jobScopeOverrides)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckExpectedObjectType(

@@ -7,8 +7,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates that local/composite action invocations provide required inputs and don't pass unknown ones.</summary>
 public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
-    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, DiagnosticList? ParseDiagnostics)> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _metadataCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, DiagnosticList? ParseDiagnostics)> _cache = new(ActionRefHelpers.FileSystemPathComparer);
+    private readonly HashSet<string> _metadataCheckedPaths = new(ActionRefHelpers.FileSystemPathComparer);
 
     public override string Name => "Local Action Inputs Rule";
 
@@ -425,7 +425,8 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
 
         var usesStr = Encoding.UTF8.GetString(uses); // Keep forward slashes for display
-        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr);
+        var repositoryRoot = ActionRefHelpers.IsSelfRepositoryUses(uses) ? Config.GetRepositoryRoot() ?? string.Empty : null;
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr, repositoryRoot);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return false;

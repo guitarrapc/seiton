@@ -28,6 +28,32 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task UnpinnedUsesRule_SelfRepositoryActionOnGhes_ReportsUnsupportedSyntax()
+    {
+        var config = new LintConfig
+        {
+            Network = new NetworkConfig
+            {
+                GitHub = new GitHubNetworkConfig { GhesApiUrl = "https://ghes.example.com/api/v3" },
+            },
+        };
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: $/.github/actions/setup
+        """;
+
+        await AssertRuleCases(
+            new UnpinnedUsesRule(),
+            "unpinned-uses",
+            [new RuleCase("ng-self-repository-action-ghes", yaml, ["not available on GitHub Enterprise Server"])],
+            config);
+    }
+
+    [Test]
     public async Task RuleRegression_UnpinnedUsesRule_TableDriven()
     {
         var cases = new[]

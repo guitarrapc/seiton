@@ -283,11 +283,11 @@ The current default rule scope in C# is:
 | Rule ID | C# Implementation Notes |
 |---|---|
 | `job-structure` | — |
-| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for `./` and `$/` contract validation. |
+| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for `./` and `$/` contract validation. Enforces `$/.github/workflows/{filename}` and rejects `$/` when GHES is configured. |
 | `permissions` | — |
 | `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
 | `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
-| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath`; `$/` resolves from the repository root and is excluded from remote pinning checks. |
+| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath`; on GitHub.com valid `$/` resolves from the repository root and is excluded from remote pinning checks. Invalid containment and configured-GHES cases receive explicit diagnostics. |
 | `unpinned-image` | — |
 | `dangerous-triggers` | — |
 | `job-permissions-required` | Auto-fix uses `supplemental-required-permissions.json`. |
@@ -313,7 +313,7 @@ The current default rule scope in C# is:
 | `background-steps` | Implemented as `VisitJobPost` via `BackgroundStepFlowAnalyzer`: one-pass job step simulation with forward scan on registry miss. Skips jobs without background flow. Attaches `structure-path` metadata for CLI structure snippets. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
-| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers`; `./`, `../`, and `$/` references are supported, with `$/` always resolved from the repository root. |
+| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers`; `./`, `../`, and GitHub.com `$/` references are supported. Repository roots prefer `.git` worktree markers, containment rejects links/reparse points, and caches use OS-aware filesystem path comparison. |
 | `action-shell-is-required` | Scoped to action-metadata documents. |
 
 Scope notes:

@@ -24,6 +24,9 @@ internal readonly ref struct ParsedActionRef
 
 internal static class ActionRefHelpers
 {
+    internal static StringComparer FileSystemPathComparer { get; } =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsSelfRepositoryUses(ReadOnlySpan<byte> uses) => uses.StartsWith("$/"u8);
 
@@ -526,13 +529,15 @@ internal static class ActionRefHelpers
             : TrimCurrentDirectoryPrefix(normalized);
     }
 
-    internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath, string? selfRepositoryRoot = null)
     {
         var normalizedLocalPath = NormalizePath(localPath);
         if (normalizedLocalPath.StartsWith("$/", StringComparison.Ordinal))
         {
-            return TryGetRepositoryRoot(workflowFilePath, out var selfRepositoryRoot)
+            return selfRepositoryRoot is not null
                 ? selfRepositoryRoot
+                : TryGetRepositoryRoot(workflowFilePath, out var discoveredRepositoryRoot)
+                    ? discoveredRepositoryRoot
                 : string.Empty;
         }
 
@@ -543,7 +548,7 @@ internal static class ActionRefHelpers
         }
 
         if (TrimCurrentDirectoryPrefix(normalizedLocalPath).StartsWith(".github/", StringComparison.Ordinal)
-            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+            && TryGetGithubDirectoryRoot(workflowFilePath, out var repositoryRoot))
         {
             return repositoryRoot;
         }
@@ -552,6 +557,27 @@ internal static class ActionRefHelpers
     }
 
     internal static bool TryGetRepositoryRoot(string filePath, out string repositoryRoot)
+    {
+        if (Path.IsPathFullyQualified(filePath))
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+            while (!string.IsNullOrEmpty(directory))
+            {
+                var gitEntry = Path.Combine(directory, ".git");
+                if (Directory.Exists(gitEntry) || File.Exists(gitEntry))
+                {
+                    repositoryRoot = NormalizePath(directory);
+                    return true;
+                }
+
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+
+        return TryGetGithubDirectoryRoot(filePath, out repositoryRoot);
+    }
+
+    internal static bool TryGetGithubDirectoryRoot(string filePath, out string repositoryRoot)
     {
         var normalizedPath = NormalizePath(filePath);
         const string marker = "/.github/";
@@ -616,10 +642,34 @@ internal static class ActionRefHelpers
     private static bool IsPathWithinBaseDirectory(string baseDirectory, string fullPath)
     {
         var relative = Path.GetRelativePath(baseDirectory, fullPath);
-        return !Path.IsPathRooted(relative)
-            && !string.Equals(relative, "..", StringComparison.Ordinal)
-            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            && !relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+        if (Path.IsPathRooted(relative)
+            || string.Equals(relative, "..", StringComparison.Ordinal)
+            || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var normalizedBase = Path.GetFullPath(baseDirectory);
+        var current = Path.GetFullPath(fullPath);
+        while (!FileSystemPathComparer.Equals(current, normalizedBase))
+        {
+            if ((File.Exists(current) || Directory.Exists(current))
+                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                return false;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || FileSystemPathComparer.Equals(parent, current))
+            {
+                return false;
+            }
+
+            current = parent;
+        }
+
+        return true;
     }
 
     internal static bool GlobMatch(string pattern, string path)

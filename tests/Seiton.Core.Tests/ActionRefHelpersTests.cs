@@ -86,6 +86,115 @@ public sealed class ActionRefHelpersTests
     }
 
     [Test]
+    public async Task TryGetRepositoryRoot_FromCompositeActionOutsideGithub_ReturnsGitRepositoryRoot()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(repositoryRoot, ".git"));
+            var actionPath = Path.Combine(repositoryRoot, "actions", "git-push", "action.yaml");
+
+            var found = ActionRefHelpers.TryGetRepositoryRoot(actionPath, out var resolvedRoot);
+
+            await Assert.That(found).IsTrue();
+            await Assert.That(resolvedRoot).IsEqualTo(ActionRefHelpers.NormalizePath(repositoryRoot));
+        }
+        finally
+        {
+            Directory.Delete(repositoryRoot, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task TryGetRepositoryRoot_FromNestedGithubDirectory_PrefersGitRepositoryRoot()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(repositoryRoot, ".git"));
+            var actionPath = Path.Combine(repositoryRoot, "actions", "parent", ".github", "actions", "child", "action.yml");
+
+            var found = ActionRefHelpers.TryGetRepositoryRoot(actionPath, out var resolvedRoot);
+
+            await Assert.That(found).IsTrue();
+            await Assert.That(resolvedRoot).IsEqualTo(ActionRefHelpers.NormalizePath(repositoryRoot));
+        }
+        finally
+        {
+            Directory.Delete(repositoryRoot, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task TryGetRepositoryRoot_FromWorktreeGitFile_ReturnsRepositoryRoot()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(repositoryRoot);
+            File.WriteAllText(Path.Combine(repositoryRoot, ".git"), "gitdir: ../worktrees/sample");
+            var actionPath = Path.Combine(repositoryRoot, "actions", "sample", "action.yml");
+
+            var found = ActionRefHelpers.TryGetRepositoryRoot(actionPath, out var resolvedRoot);
+
+            await Assert.That(found).IsTrue();
+            await Assert.That(resolvedRoot).IsEqualTo(ActionRefHelpers.NormalizePath(repositoryRoot));
+        }
+        finally
+        {
+            Directory.Delete(repositoryRoot, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task NormalizeFullPath_SelfRepositoryReferenceThroughSymlink_ReturnsNull()
+    {
+        var testRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var repositoryRoot = Path.Combine(testRoot, "repo");
+        var outsideRoot = Path.Combine(testRoot, "outside");
+        try
+        {
+            Directory.CreateDirectory(repositoryRoot);
+            Directory.CreateDirectory(outsideRoot);
+            var linkPath = Path.Combine(repositoryRoot, "linked");
+            try
+            {
+                Directory.CreateSymbolicLink(linkPath, outsideRoot);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Skip.Test("Creating symbolic links is not permitted in this environment.");
+            }
+            catch (PlatformNotSupportedException)
+            {
+                Skip.Test("Symbolic links are not supported on this platform.");
+            }
+
+            var resolved = ActionRefHelpers.NormalizeFullPath(repositoryRoot, "$/linked/action");
+
+            await Assert.That(resolved).IsNull();
+        }
+        finally
+        {
+            var linkPath = Path.Combine(repositoryRoot, "linked");
+            if (Directory.Exists(linkPath))
+            {
+                Directory.Delete(linkPath);
+            }
+
+            Directory.Delete(testRoot, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task FileSystemPathComparer_MatchesOperatingSystemCaseSensitivity()
+    {
+        var equals = ActionRefHelpers.FileSystemPathComparer.Equals("Action.yml", "action.yml");
+
+        await Assert.That(equals).IsEqualTo(OperatingSystem.IsWindows());
+    }
+
+    [Test]
     public async Task ResolveLocalReferenceBaseDirectory_FromCompositeActionPath_UsesRepositoryRoot()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

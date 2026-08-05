@@ -10,12 +10,10 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal sealed class LocalReusableWorkflowOutputResolver
 {
-    private static readonly StringComparer PathComparer =
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
     private readonly string _workflowDirectory;
     private readonly string? _repositoryRoot;
-    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
+    private readonly string? _githubDirectoryRoot;
+    private readonly Dictionary<string, string[]?> _cache = new(ActionRefHelpers.FileSystemPathComparer);
 
     public LocalReusableWorkflowOutputResolver(string workflowFilePath)
     {
@@ -23,6 +21,9 @@ internal sealed class LocalReusableWorkflowOutputResolver
         var normalizedWorkflowPath = ActionRefHelpers.NormalizePath(workflowFilePath);
         _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
             ? repositoryRoot
+            : null;
+        _githubDirectoryRoot = ActionRefHelpers.TryGetGithubDirectoryRoot(normalizedWorkflowPath, out var githubDirectoryRoot)
+            ? githubDirectoryRoot
             : null;
     }
 
@@ -210,10 +211,10 @@ internal sealed class LocalReusableWorkflowOutputResolver
         }
 
         var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);
-        if (_repositoryRoot is not null
+        if (_githubDirectoryRoot is not null
             && trimmedLocalPath.StartsWith(".github/", StringComparison.Ordinal))
         {
-            return _repositoryRoot;
+            return _githubDirectoryRoot;
         }
 
         return _workflowDirectory;
