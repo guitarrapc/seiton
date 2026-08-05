@@ -246,7 +246,7 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 
 **ExecRun** (`run:`): `Run` (required), `Shell?`, `WorkingDirectory?`
 
-**ExecAction** (`uses:`): `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only)
+**ExecAction** (`uses:`): `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only). A `Uses` value beginning with `$/` is a self-repository reference: on GitHub.com it resolves from the repository root at the exact commit running the workflow and does not require checkout. This form is supported wherever `./` action references are supported, including workflow steps and composite action steps. GitHub Enterprise Server does not support this runtime syntax; the parser still preserves and classifies it so semantic rules can report the platform incompatibility.
 
 **ExecWait** (`wait:`): `Targets` — plain string or non-empty string sequence
 
@@ -319,7 +319,7 @@ Credentials: `username` + `password` (both required), or expression.
 
 ### 2.15 WorkflowCall (job-level reusable workflow)
 
-`uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`)
+`uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`). On GitHub.com, `$/` introduces a self-repository reusable-workflow reference resolved at the exact running commit. Its valid form is `$/.github/workflows/{filename}`; subdirectories beneath `.github/workflows` are not supported. GitHub Enterprise Server does not support this runtime syntax, while the parser continues to preserve and classify the raw value.
 
 ### 2.16 ActionMetadata (action.yml / action.yaml)
 

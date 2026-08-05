@@ -79,7 +79,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var uses = workflowCall.Uses.Value;
         var usesLocation = BuildUsesLocation(workflowCall);
-        if (uses.StartsWith("./"u8))
+        if (IsLocalReusableWorkflowUses(uses))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
@@ -174,8 +174,18 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        if (IsLocalActionUses(uses))
         {
+            if (IsSelfRepositoryUses(uses)
+                && !string.IsNullOrEmpty(Config.Network.GitHub.GhesApiUrl))
+            {
+                AddStepError(
+                    step,
+                    "self-repository references beginning with '$/' are not available on GitHub Enterprise Server",
+                    usesLocation);
+                return;
+            }
+
             if (uses.IndexOf((byte)'@') >= 0)
             {
                 var localRefLocation = BuildRefLocation(actionExec.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
@@ -324,8 +334,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        var relativePath = DecodeAscii(uses);
-        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath, relativePath);
+        var relativePath = Encoding.UTF8.GetString(uses);
+        var repositoryRoot = ActionRefHelpers.IsSelfRepositoryUses(uses) ? Config.GetRepositoryRoot() ?? string.Empty : null;
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath, relativePath, repositoryRoot);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return;
@@ -334,6 +345,11 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var resolvedPath = ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
         if (resolvedPath is null)
         {
+            if (ActionRefHelpers.IsSelfRepositoryUses(uses))
+            {
+                AddStepError(step, $"invalid self-repository action path '{relativePath}'", location);
+            }
+
             return;
         }
 
@@ -350,17 +366,6 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             AddStepWarning(step, $"local action path '{relativePath}' is missing action.yml or action.yaml", location);
         }
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
     }
 
     private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath, ReadOnlySpan<byte> actionRef)

@@ -5,6 +5,30 @@ namespace Seiton.Core.Tests;
 public sealed class LocalReusableWorkflowOutputResolverUnitTests
 {
     [Test]
+    public async Task ResolveOutputNames_SelfRepositoryReference_ResolvesFromRepositoryRoot()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            var workflowDirectory = Path.Combine(repositoryRoot, ".github", "workflows");
+            Directory.CreateDirectory(workflowDirectory);
+            File.WriteAllText(Path.Combine(workflowDirectory, "reusable.yml"), BuildReusableWorkflowYaml("self_output"));
+
+            var callerPath = Path.Combine(workflowDirectory, "caller.yml");
+            var resolver = new LocalReusableWorkflowOutputResolver(callerPath);
+
+            var resolved = resolver.ResolveOutputNames("$/.github/workflows/reusable.yml"u8);
+
+            await Assert.That(resolved).IsNotNull();
+            await Assert.That(resolved![0]).IsEqualTo("self_output");
+        }
+        finally
+        {
+            TryDeleteDirectory(repositoryRoot);
+        }
+    }
+
+    [Test]
     public async Task ResolveOutputNames_EquivalentWorkflowPaths_UsesCachedResolvedOutputs()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -33,6 +57,37 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
         finally
         {
             TryDeleteDirectory(repositoryRoot);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputNames_NestedGithubFixture_DistinguishesWorkspaceAndSelfRepositoryRoots()
+    {
+        var gitRepositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(gitRepositoryRoot, ".git"));
+            var gitWorkflowDirectory = Path.Combine(gitRepositoryRoot, ".github", "workflows");
+            var fixtureWorkflowDirectory = Path.Combine(gitRepositoryRoot, "fixtures", "sample", ".github", "workflows");
+            Directory.CreateDirectory(gitWorkflowDirectory);
+            Directory.CreateDirectory(fixtureWorkflowDirectory);
+            File.WriteAllText(Path.Combine(gitWorkflowDirectory, "reusable.yml"), BuildReusableWorkflowYaml("self_repository_output"));
+            File.WriteAllText(Path.Combine(fixtureWorkflowDirectory, "reusable.yml"), BuildReusableWorkflowYaml("workspace_output"));
+
+            var callerPath = Path.Combine(fixtureWorkflowDirectory, "caller.yml");
+            var resolver = new LocalReusableWorkflowOutputResolver(callerPath);
+
+            var workspaceResolved = resolver.ResolveOutputNames("./.github/workflows/reusable.yml"u8);
+            var selfRepositoryResolved = resolver.ResolveOutputNames("$/.github/workflows/reusable.yml"u8);
+
+            await Assert.That(workspaceResolved).IsNotNull();
+            await Assert.That(workspaceResolved![0]).IsEqualTo("workspace_output");
+            await Assert.That(selfRepositoryResolved).IsNotNull();
+            await Assert.That(selfRepositoryResolved![0]).IsEqualTo("self_repository_output");
+        }
+        finally
+        {
+            TryDeleteDirectory(gitRepositoryRoot);
         }
     }
 

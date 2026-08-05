@@ -5,6 +5,30 @@ namespace Seiton.Core.Tests;
 public sealed class LocalActionOutputResolverUnitTests
 {
     [Test]
+    public async Task ResolveOutputNames_SelfRepositoryReference_ResolvesFromRepositoryRoot()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            var actionDirectory = Path.Combine(repositoryRoot, ".github", "actions", "sample");
+            Directory.CreateDirectory(actionDirectory);
+            File.WriteAllText(Path.Combine(actionDirectory, "action.yml"), BuildActionYaml("self_output"));
+
+            var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+            var resolver = new LocalActionOutputResolver(workflowPath);
+
+            var resolved = resolver.ResolveOutputNames("$/.github/actions/sample"u8);
+
+            await Assert.That(resolved).IsNotNull();
+            await Assert.That(resolved![0]).IsEqualTo("self_output");
+        }
+        finally
+        {
+            TryDeleteDirectory(repositoryRoot);
+        }
+    }
+
+    [Test]
     public async Task ResolveOutputNames_EquivalentGithubActionPaths_UsesCachedResolvedOutputs()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

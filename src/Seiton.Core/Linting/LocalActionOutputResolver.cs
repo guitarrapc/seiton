@@ -9,12 +9,10 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal sealed class LocalActionOutputResolver
 {
-    private static readonly StringComparer PathComparer =
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
     private readonly string _workflowDirectory;
     private readonly string? _repositoryRoot;
-    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
+    private readonly string? _githubDirectoryRoot;
+    private readonly Dictionary<string, string[]?> _cache = new(ActionRefHelpers.FileSystemPathComparer);
 
     public LocalActionOutputResolver(string workflowFilePath)
     {
@@ -23,15 +21,18 @@ internal sealed class LocalActionOutputResolver
         _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
             ? repositoryRoot
             : null;
+        _githubDirectoryRoot = ActionRefHelpers.TryGetGithubDirectoryRoot(normalizedWorkflowPath, out var githubDirectoryRoot)
+            ? githubDirectoryRoot
+            : null;
     }
 
     /// <summary>
-    /// Given a local action uses reference (e.g. "./.github/actions/my-action"), returns the output names
+    /// Given a local action uses reference (e.g. "./.github/actions/my-action" or "$/.github/actions/my-action"), returns the output names
     /// declared in the action metadata, or null if the action cannot be resolved.
     /// </summary>
     public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
     {
-        if (!usesValue.StartsWith("./"u8) && !usesValue.StartsWith("../"u8))
+        if (!ActionRefHelpers.IsLocalActionUses(usesValue))
         {
             return null;
         }
@@ -103,7 +104,7 @@ internal sealed class LocalActionOutputResolver
         // Guard against path traversal: resolved path must remain under the repository root
         // (or the base directory when the repository root is unknown).
         // Uses ../relative are valid within the repo, so check against repo root when available.
-        var traversalBase = _repositoryRoot ?? baseDirectory;
+        var traversalBase = _githubDirectoryRoot ?? _repositoryRoot ?? baseDirectory;
         var relativeToBase = Path.GetRelativePath(traversalBase, resolvedPath);
         var isTraversal = string.Equals(relativeToBase, "..", StringComparison.Ordinal)
             || relativeToBase.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
@@ -188,11 +189,16 @@ internal sealed class LocalActionOutputResolver
             return string.Empty;
         }
 
+        if (localPath.StartsWith("$/", StringComparison.Ordinal))
+        {
+            return _repositoryRoot ?? string.Empty;
+        }
+
         var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);
-        if (_repositoryRoot is not null
+        if (_githubDirectoryRoot is not null
             && trimmedLocalPath.StartsWith(".github/", StringComparison.Ordinal))
         {
-            return _repositoryRoot;
+            return _githubDirectoryRoot;
         }
 
         return _workflowDirectory;

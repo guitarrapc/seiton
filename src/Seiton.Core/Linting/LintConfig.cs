@@ -36,6 +36,8 @@ public sealed class LintConfig
 
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
+    private string? _repositoryRoot;
+    private bool _repositoryRootResolved;
     private long _sourceContentHash;
 
     /// <summary>
@@ -184,6 +186,8 @@ public sealed class LintConfig
         Utf8Yaml = utf8Yaml;
         Arena = arena;
         FilePath = filePath;
+        _repositoryRoot = null;
+        _repositoryRootResolved = false;
         ExpressionArtifacts = expressionArtifacts;
         _rules = rules;
         _fix = fix ?? DefaultFix;
@@ -194,6 +198,20 @@ public sealed class LintConfig
         {
             _lineStarts = null;
         }
+    }
+
+    internal string? GetRepositoryRoot()
+    {
+        if (!_repositoryRootResolved)
+        {
+            _repositoryRootResolved = true;
+            _repositoryRoot = !string.IsNullOrEmpty(FilePath)
+                && ActionRefHelpers.TryGetRepositoryRoot(FilePath, out var repositoryRoot)
+                    ? repositoryRoot
+                    : null;
+        }
+
+        return _repositoryRoot;
     }
 
     /// <summary>Looks up the rule configuration for the specified <paramref name="ruleId"/>.</summary>

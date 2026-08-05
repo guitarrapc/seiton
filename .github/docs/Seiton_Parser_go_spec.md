@@ -415,6 +415,8 @@ type ExecAction struct {
 }
 ```
 
+`ExecAction.Uses` preserves `$/path/to/action` self-repository references as raw strings. On GitHub.com, the `$/` prefix identifies resolution from the repository root at the exact commit running the workflow, in every step context where `./` is supported. GitHub Enterprise Server compatibility remains a semantic-lint concern rather than a parser classification concern.
+
 ### 2.6 Structural Nodes (Spec §2.7–§2.11)
 
 ```go
@@ -509,6 +511,8 @@ type Snapshot struct {
     If        *String
 }
 ```
+
+`WorkflowCall.Uses` likewise preserves `$/.github/workflows/{filename}` self-repository references; the prefix distinguishes them from workspace-relative `./` calls and remote `owner/repo/path@ref` calls. Exact path-shape and GitHub Enterprise Server compatibility checks remain semantic-lint concerns.
 
 ### 2.7 Strategy / Matrix (Spec §2.13)
 

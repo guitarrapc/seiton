@@ -88,7 +88,7 @@ public sealed class GitHubAppTokenInputsRule() : RuleBase(RuleId.GitHubAppTokenI
 
     private static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
     {
-        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
+        if (uses.IsEmpty || ActionRefHelpers.IsLocalActionUses(uses) || uses.StartsWith("docker://"u8))
         {
             return false;
         }

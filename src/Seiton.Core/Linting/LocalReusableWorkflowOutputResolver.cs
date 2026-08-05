@@ -10,12 +10,10 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal sealed class LocalReusableWorkflowOutputResolver
 {
-    private static readonly StringComparer PathComparer =
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
     private readonly string _workflowDirectory;
     private readonly string? _repositoryRoot;
-    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
+    private readonly string? _githubDirectoryRoot;
+    private readonly Dictionary<string, string[]?> _cache = new(ActionRefHelpers.FileSystemPathComparer);
 
     public LocalReusableWorkflowOutputResolver(string workflowFilePath)
     {
@@ -23,6 +21,9 @@ internal sealed class LocalReusableWorkflowOutputResolver
         var normalizedWorkflowPath = ActionRefHelpers.NormalizePath(workflowFilePath);
         _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
             ? repositoryRoot
+            : null;
+        _githubDirectoryRoot = ActionRefHelpers.TryGetGithubDirectoryRoot(normalizedWorkflowPath, out var githubDirectoryRoot)
+            ? githubDirectoryRoot
             : null;
     }
 
@@ -33,15 +34,14 @@ internal sealed class LocalReusableWorkflowOutputResolver
     private const long MaxFileSizeBytes = 2 * 1024 * 1024;
 
     /// <summary>
-    /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml"),
+    /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml" or "$/.github/workflows/reusable.yml"),
     /// returns the output names declared in <c>on.workflow_call.outputs</c>,
     /// or null if the workflow cannot be resolved.
     /// Returns empty array when the workflow is resolved but declares no outputs.
     /// </summary>
     public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
     {
-        // GitHub Actions local reusable workflows must start with "./"
-        if (!usesValue.StartsWith("./"u8))
+        if (!ActionRefHelpers.IsLocalReusableWorkflowUses(usesValue))
         {
             return null;
         }
@@ -205,11 +205,16 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return string.Empty;
         }
 
+        if (localPath.StartsWith("$/", StringComparison.Ordinal))
+        {
+            return _repositoryRoot ?? string.Empty;
+        }
+
         var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);
-        if (_repositoryRoot is not null
+        if (_githubDirectoryRoot is not null
             && trimmedLocalPath.StartsWith(".github/", StringComparison.Ordinal))
         {
-            return _repositoryRoot;
+            return _githubDirectoryRoot;
         }
 
         return _workflowDirectory;

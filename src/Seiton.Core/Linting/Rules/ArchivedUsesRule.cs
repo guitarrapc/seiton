@@ -91,7 +91,7 @@ public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
     {
         owner = default;
         repo = default;
-        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))
+        if (uses.IsEmpty || ActionRefHelpers.IsLocalActionUses(uses) || uses.StartsWith("docker://"u8))
         {
             return false;
         }

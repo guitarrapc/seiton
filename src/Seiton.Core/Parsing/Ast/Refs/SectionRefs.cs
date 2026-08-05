@@ -780,6 +780,9 @@ public readonly struct WorkflowCallRef
 
     public StringRef Uses => HasValue ? new(ArenaChecked, ArenaChecked!.GetWorkflowCall(_id).Uses) : default;
 
+    /// <summary>Whether <c>uses:</c> references the current repository at the running commit via <c>$/</c>.</summary>
+    public bool IsSelfRepositoryReference => HasValue && Uses.Value.StartsWith("$/"u8);
+
     public TextRange? UsesKeyRange => HasValue ? ArenaChecked!.GetWorkflowCall(_id).UsesKeyRange : null;
 
     public WorkflowCallInputRefMap Inputs => HasValue ? new(ArenaChecked, ArenaChecked!.GetWorkflowCall(_id).Inputs) : default;

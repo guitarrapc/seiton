@@ -232,7 +232,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Validates reusable workflow call semantics. `with` and `secrets` are only valid under a `uses` job. Reusable-call jobs must not contain incompatible execution keys (`steps`, `container`, `services`, etc.).
+Validates reusable workflow call semantics. `with` and `secrets` are only valid under a `uses` job. Reusable-call jobs must not contain incompatible execution keys (`steps`, `container`, `services`, etc.). Same-repository calls using either `./` or `$/` are resolved locally when possible. The self-repository form must be `$/.github/workflows/{filename}` without a subdirectory and is unavailable on GitHub Enterprise Server.
 
 **Why:** Reusable-call contract violations fail late at runtime and can silently bypass intended inputs/secrets wiring.
 
@@ -1484,7 +1484,7 @@ on:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Validates that local/composite action invocations (`uses: ./path`) provide all required inputs and do not pass unknown input keys. Also warns on deprecated inputs. Applies only to workflow files.
+Validates that local/composite action invocations (`uses: ./path`, `../path`, or `$/path`) provide all required inputs and do not pass unknown input keys. Also warns on deprecated inputs. Applies only to workflow files.
 
 **Why:** Local action contract mismatches fail execution at call sites and are easy to miss during action evolution.
 
@@ -2782,6 +2782,8 @@ jobs:
 | ✓ | — | ✗ (✓ with `--enable-pin-network`) |
 
 Warns when `uses:` references are not pinned to a full 40-character commit SHA. Mutable refs (`@v4`, `@main`) can be silently updated by the action maintainer.
+
+On GitHub.com, valid self-repository references beginning with `$/` are bound by GitHub to the running workflow or action commit, so they do not require an `@ref` and are not reported as unpinned. They are unavailable on GitHub Enterprise Server. Repository-escaping or link-traversing local paths are diagnosed as invalid.
 
 **Why:** Mutable refs weaken supply-chain integrity because the referenced code can change without any workflow diff.
 

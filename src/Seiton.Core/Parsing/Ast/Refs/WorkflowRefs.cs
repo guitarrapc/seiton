@@ -373,6 +373,9 @@ public readonly struct ExecActionRef
 
     public StringRef Uses => HasValue ? new(ArenaChecked, ArenaChecked!.GetExecAction(_payload).Uses) : default;
 
+    /// <summary>Whether <c>uses:</c> references the current repository at the running commit via <c>$/</c>.</summary>
+    public bool IsSelfRepositoryReference => HasValue && Uses.Value.StartsWith("$/"u8);
+
     public TextRange? UsesKeyRange => HasValue ? ArenaChecked!.GetExecAction(_payload).UsesKeyRange : null;
 
     /// <summary>The <c>with:</c> inputs.</summary>

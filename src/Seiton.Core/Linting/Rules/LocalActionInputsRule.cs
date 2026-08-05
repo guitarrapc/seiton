@@ -7,8 +7,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates that local/composite action invocations provide required inputs and don't pass unknown ones.</summary>
 public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
-    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, DiagnosticList? ParseDiagnostics)> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _metadataCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, DiagnosticList? ParseDiagnostics)> _cache = new(ActionRefHelpers.FileSystemPathComparer);
+    private readonly HashSet<string> _metadataCheckedPaths = new(ActionRefHelpers.FileSystemPathComparer);
 
     public override string Name => "Local Action Inputs Rule";
 
@@ -413,7 +413,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         displayPath = string.Empty;
         invalidRefFormat = false;
 
-        if (!uses.StartsWith("./"u8) && !uses.StartsWith("../"u8))
+        if (!ActionRefHelpers.IsLocalActionUses(uses))
         {
             return false;
         }
@@ -424,8 +424,9 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return false;
         }
 
-        var usesStr = DecodeAscii(uses); // Keep forward slashes for display
-        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr);
+        var usesStr = Encoding.UTF8.GetString(uses); // Keep forward slashes for display
+        var repositoryRoot = ActionRefHelpers.IsSelfRepositoryUses(uses) ? Config.GetRepositoryRoot() ?? string.Empty : null;
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr, repositoryRoot);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return false;
@@ -473,14 +474,4 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return false;
     }
 
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
-    }
 }
