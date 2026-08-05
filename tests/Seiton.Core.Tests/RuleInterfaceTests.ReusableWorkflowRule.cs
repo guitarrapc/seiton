@@ -85,6 +85,24 @@ public sealed partial class RuleInterfaceTests
                     uses: owner/repo/path/to/workflow.yml@main
             """,
             []),
+            new RuleCase(
+            "ok-self-repository-format",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: $/.github/workflows/reuse.yml
+            """,
+            []),
+            new RuleCase(
+            "ng-self-repository-with-ref",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: $/.github/workflows/reuse.yml@main
+            """,
+            ["is not following the format"]),
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);

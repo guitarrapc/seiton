@@ -24,13 +24,24 @@ internal readonly ref struct ParsedActionRef
 
 internal static class ActionRefHelpers
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsSelfRepositoryUses(ReadOnlySpan<byte> uses) => uses.StartsWith("$/"u8);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsLocalActionUses(ReadOnlySpan<byte> uses)
+        => uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || IsSelfRepositoryUses(uses);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsLocalReusableWorkflowUses(ReadOnlySpan<byte> uses)
+        => uses.StartsWith("./"u8) || IsSelfRepositoryUses(uses);
+
     /// <summary>
-    /// Validates GitHub remote <c>uses</c> shape (not <c>./</c>, <c>docker://</c>) and splits <c>actionPath</c> / <c>ref</c> at the last <c>@</c>.
+    /// Validates GitHub remote <c>uses</c> shape (not a local <c>./</c>, <c>../</c>, or <c>$/</c> reference, nor <c>docker://</c>) and splits <c>actionPath</c> / <c>ref</c> at the last <c>@</c>.
     /// </summary>
     internal static bool TryParseRemoteUses(ReadOnlySpan<byte> uses, out ParsedActionRef parsed)
     {
         parsed = default;
-        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
+        if (uses.IsEmpty || IsLocalActionUses(uses) || uses.StartsWith("docker://"u8))
         {
             return false;
         }
@@ -507,15 +518,31 @@ internal static class ActionRefHelpers
         return start == 0 ? normalized : normalized[start..];
     }
 
+    internal static string TrimLocalReferencePrefix(string path)
+    {
+        var normalized = NormalizePath(path);
+        return normalized.StartsWith("$/", StringComparison.Ordinal)
+            ? normalized[2..]
+            : TrimCurrentDirectoryPrefix(normalized);
+    }
+
     internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
     {
+        var normalizedLocalPath = NormalizePath(localPath);
+        if (normalizedLocalPath.StartsWith("$/", StringComparison.Ordinal))
+        {
+            return TryGetRepositoryRoot(workflowFilePath, out var selfRepositoryRoot)
+                ? selfRepositoryRoot
+                : string.Empty;
+        }
+
         var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
         if (string.IsNullOrEmpty(workflowDirectory))
         {
             return string.Empty;
         }
 
-        if (TrimCurrentDirectoryPrefix(localPath).StartsWith(".github/", StringComparison.Ordinal)
+        if (TrimCurrentDirectoryPrefix(normalizedLocalPath).StartsWith(".github/", StringComparison.Ordinal)
             && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
         {
             return repositoryRoot;
@@ -570,12 +597,29 @@ internal static class ActionRefHelpers
     {
         try
         {
-            return NormalizePath(Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath))));
+            var normalizedRelativePath = NormalizePath(relativePath);
+            var isSelfRepository = normalizedRelativePath.StartsWith("$/", StringComparison.Ordinal);
+            var fullPath = NormalizePath(Path.GetFullPath(Path.Combine(baseDirectory, TrimLocalReferencePrefix(normalizedRelativePath))));
+            if (isSelfRepository && !IsPathWithinBaseDirectory(baseDirectory, fullPath))
+            {
+                return null;
+            }
+
+            return fullPath;
         }
         catch
         {
             return null;
         }
+    }
+
+    private static bool IsPathWithinBaseDirectory(string baseDirectory, string fullPath)
+    {
+        var relative = Path.GetRelativePath(baseDirectory, fullPath);
+        return !Path.IsPathRooted(relative)
+            && !string.Equals(relative, "..", StringComparison.Ordinal)
+            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            && !relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
     }
 
     internal static bool GlobMatch(string pattern, string path)

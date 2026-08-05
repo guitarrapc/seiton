@@ -283,11 +283,11 @@ The current default rule scope in C# is:
 | Rule ID | C# Implementation Notes |
 |---|---|
 | `job-structure` | — |
-| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for local contract validation. |
+| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for `./` and `$/` contract validation. |
 | `permissions` | — |
 | `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
 | `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
-| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath` (repository root when the analyzed file is under `.github/`). |
+| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath`; `$/` resolves from the repository root and is excluded from remote pinning checks. |
 | `unpinned-image` | — |
 | `dangerous-triggers` | — |
 | `job-permissions-required` | Auto-fix uses `supplemental-required-permissions.json`. |

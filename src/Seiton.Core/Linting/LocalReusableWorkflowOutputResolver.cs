@@ -33,15 +33,14 @@ internal sealed class LocalReusableWorkflowOutputResolver
     private const long MaxFileSizeBytes = 2 * 1024 * 1024;
 
     /// <summary>
-    /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml"),
+    /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml" or "$/.github/workflows/reusable.yml"),
     /// returns the output names declared in <c>on.workflow_call.outputs</c>,
     /// or null if the workflow cannot be resolved.
     /// Returns empty array when the workflow is resolved but declares no outputs.
     /// </summary>
     public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
     {
-        // GitHub Actions local reusable workflows must start with "./"
-        if (!usesValue.StartsWith("./"u8))
+        if (!ActionRefHelpers.IsLocalReusableWorkflowUses(usesValue))
         {
             return null;
         }
@@ -203,6 +202,11 @@ internal sealed class LocalReusableWorkflowOutputResolver
         if (string.IsNullOrEmpty(_workflowDirectory))
         {
             return string.Empty;
+        }
+
+        if (localPath.StartsWith("$/", StringComparison.Ordinal))
+        {
+            return _repositoryRoot ?? string.Empty;
         }
 
         var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);

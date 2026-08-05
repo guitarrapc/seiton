@@ -79,7 +79,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var uses = workflowCall.Uses.Value;
         var usesLocation = BuildUsesLocation(workflowCall);
-        if (uses.StartsWith("./"u8))
+        if (IsLocalReusableWorkflowUses(uses))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
@@ -174,7 +174,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        if (IsLocalActionUses(uses))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {

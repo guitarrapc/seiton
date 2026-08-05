@@ -63,8 +63,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
     {
         var uses = workflowCall.Uses.Value;
 
-        // Local workflow (starts with ./)
-        if (uses.StartsWith("./"u8))
+        if (ActionRefHelpers.IsLocalReusableWorkflowUses(uses))
         {
             // Local paths must not contain @ref — validate format before contract
             if (uses.IndexOf((byte)'@') >= 0)
@@ -370,7 +369,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         relativePath = string.Empty;
         invalidRefFormat = false;
 
-        if (!uses.StartsWith("./"u8))
+        if (!ActionRefHelpers.IsLocalReusableWorkflowUses(uses))
         {
             return false;
         }

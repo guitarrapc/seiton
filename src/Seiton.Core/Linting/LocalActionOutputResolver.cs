@@ -26,12 +26,12 @@ internal sealed class LocalActionOutputResolver
     }
 
     /// <summary>
-    /// Given a local action uses reference (e.g. "./.github/actions/my-action"), returns the output names
+    /// Given a local action uses reference (e.g. "./.github/actions/my-action" or "$/.github/actions/my-action"), returns the output names
     /// declared in the action metadata, or null if the action cannot be resolved.
     /// </summary>
     public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
     {
-        if (!usesValue.StartsWith("./"u8) && !usesValue.StartsWith("../"u8))
+        if (!ActionRefHelpers.IsLocalActionUses(usesValue))
         {
             return null;
         }
@@ -186,6 +186,11 @@ internal sealed class LocalActionOutputResolver
         if (string.IsNullOrEmpty(_workflowDirectory))
         {
             return string.Empty;
+        }
+
+        if (localPath.StartsWith("$/", StringComparison.Ordinal))
+        {
+            return _repositoryRoot ?? string.Empty;
         }
 
         var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);

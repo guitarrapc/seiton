@@ -7,6 +7,25 @@ namespace Seiton.Core.Tests;
 
 public sealed partial class RuleInterfaceTests
 {
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_SelfRepositoryReferences_NoDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call:
+            uses: $/.github/workflows/reusable.yml
+          build:
+            runs-on: ubuntu-24.04
+            steps:
+              - uses: $/.github/actions/setup
+        """;
+
+        await AssertRuleCases(
+            new UnpinnedUsesRule(),
+            "unpinned-uses",
+            [new RuleCase("ok-self-repository-references", yaml, [])]);
+    }
 
     [Test]
     public async Task RuleRegression_UnpinnedUsesRule_TableDriven()
@@ -69,6 +88,17 @@ public sealed partial class RuleInterfaceTests
             """,
             ["local action uses must not contain '@ref'"]),
             new RuleCase(
+            "ng-self-repository-action-with-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: $/.github/actions/setup@v1
+            """,
+            ["local action uses must not contain '@ref'"]),
+            new RuleCase(
             "ok-docker-action-reference",
             """
             on: push
@@ -97,6 +127,15 @@ public sealed partial class RuleInterfaceTests
                     uses: owner/repo/.github/workflows/reusable.yml@main
             """,
             ["not pinned to a full-length commit SHA"]),
+            new RuleCase(
+            "ng-self-repository-workflow-with-ref",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: $/.github/workflows/reusable.yml@main
+            """,
+            ["local reusable workflow reference must not contain '@ref'"]),
             // regression: step without run/uses produces empty uses — should not trigger unpinned-uses rule
             new RuleCase(
             "ok-empty-uses-from-parser-error",

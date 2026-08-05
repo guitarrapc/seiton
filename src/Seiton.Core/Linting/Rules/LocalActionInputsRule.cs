@@ -413,7 +413,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         displayPath = string.Empty;
         invalidRefFormat = false;
 
-        if (!uses.StartsWith("./"u8) && !uses.StartsWith("../"u8))
+        if (!ActionRefHelpers.IsLocalActionUses(uses))
         {
             return false;
         }
