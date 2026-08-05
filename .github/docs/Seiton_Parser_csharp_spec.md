@@ -558,7 +558,7 @@ public readonly struct StepData
 public enum StepExecKind { None, Run, Action, Wait, WaitAll, Cancel, Parallel }
 ```
 
-Kind-specific payload rows: `ExecRunData` (run/shell/working-directory), `ExecActionData` (uses, `with:` inputs as a `NodeRange` over key-embedded case-insensitive `ActionInputData` rows, entrypoint, args), `ExecWaitData` (targets `StringIdRange`), `ExecWaitAllData`, `ExecCancelData` (target), `ExecParallelData` (nested steps).
+Kind-specific payload rows: `ExecRunData` (run/shell/working-directory), `ExecActionData` (uses, `with:` inputs as a `NodeRange` over key-embedded case-insensitive `ActionInputData` rows, entrypoint, args), `ExecWaitData` (targets `StringIdRange`), `ExecWaitAllData`, `ExecCancelData` (target), `ExecParallelData` (nested steps). `ExecActionRef.IsSelfRepositoryReference` exposes whether the raw `uses` value begins with the `$/` self-repository prefix.
 
 Step lists (`Job.Steps`, `ExecParallelData.Steps`, `ActionMetadataRunsData.Steps`) are `StepIdRange` values over the arena's shared `StepId` list store — never direct ranges over the step row table, because nested `parallel:` parsing appends step rows non-contiguously.
 
@@ -574,7 +574,7 @@ Structural sections are rows addressed by typed IDs (`Ast/SectionData.cs`):
 - `ConcurrencyData` (`ConcurrencyId`): group / cancel-in-progress / queue scalars.
 - `EnvironmentData` (`EnvironmentId`): name / url / deployment scalars.
 - `RunnerData` (`RunnerId`): `Labels` (`StringIdRange`), `LabelsExpr`, `Group`.
-- `WorkflowCallData` (`WorkflowCallId`): `Uses` + `with:` inputs and `secrets:` as key-embedded case-insensitive row maps + `InheritSecrets` flag.
+- `WorkflowCallData` (`WorkflowCallId`): `Uses` + `with:` inputs and `secrets:` as key-embedded case-insensitive row maps + `InheritSecrets` flag. `WorkflowCallRef.IsSelfRepositoryReference` exposes whether the call uses the `$/` self-repository form.
 - `SnapshotData` (`SnapshotId`): job `snapshot:` section.
 
 Implementation note: `Concurrency.Queue` accepts literal values `single` and `max`. When the scalar contains expression markers, the parser preserves the string node and still performs normal parse-time expression validation (including semantic validation of the expression); only the literal `single`/`max` domain check is skipped for expression-bearing strings.

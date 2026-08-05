@@ -246,7 +246,7 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 
 **ExecRun** (`run:`): `Run` (required), `Shell?`, `WorkingDirectory?`
 
-**ExecAction** (`uses:`): `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only)
+**ExecAction** (`uses:`): `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only). A `Uses` value beginning with `$/` is a self-repository reference: it resolves from the repository root at the exact commit running the workflow and does not require checkout. This form is supported wherever `./` action references are supported, including workflow steps and composite action steps.
 
 **ExecWait** (`wait:`): `Targets` — plain string or non-empty string sequence
 
@@ -319,7 +319,7 @@ Credentials: `username` + `password` (both required), or expression.
 
 ### 2.15 WorkflowCall (job-level reusable workflow)
 
-`uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`)
+`uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`). A `uses` value beginning with `$/` is a self-repository reusable-workflow reference resolved at the exact running commit.
 
 ### 2.16 ActionMetadata (action.yml / action.yaml)
 
