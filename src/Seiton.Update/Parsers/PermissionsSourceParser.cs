@@ -40,9 +40,17 @@ internal sealed partial class PermissionsSourceParser
                     $"Invalid permission scope name '{entry.Name}' in {path}. Expected lowercase kebab-case.");
             }
 
-            foreach (var value in entry.Allowed ?? [])
+            var values = (entry.Allowed ?? []).Where(static v => !string.IsNullOrWhiteSpace(v)).ToArray();
+            if (values.Length == 0)
             {
-                if (!string.IsNullOrWhiteSpace(value) && !AccessValueRegex().IsMatch(value))
+                // Would emit "name" => [], which keeps the scope known while rejecting every value.
+                throw new InvalidDataException(
+                    $"Permission scope '{entry.Name}' in {path} has no access value. Expected at least one.");
+            }
+
+            foreach (var value in values)
+            {
+                if (!AccessValueRegex().IsMatch(value))
                 {
                     throw new InvalidDataException(
                         $"Invalid access value '{value}' for permission scope '{entry.Name}' in {path}. Expected lowercase letters.");

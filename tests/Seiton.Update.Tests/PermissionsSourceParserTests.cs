@@ -85,6 +85,32 @@ public sealed class PermissionsSourceParserTests
         }
     }
 
+    /// <summary>
+    /// A scope with no access values generates <c>"name" =&gt; []</c>, which keeps the scope known
+    /// while rejecting every value and emitting a truncated "available values are" message.
+    /// </summary>
+    [Test]
+    [Arguments("""{ "name": "contents" }""")]
+    [Arguments("""{ "name": "contents", "allowed": [] }""")]
+    [Arguments("""{ "name": "contents", "allowed": ["", "  "] }""")]
+    public async Task Parse_ScopeWithoutAccessValues_Throws(string scopeJson)
+    {
+        var path = WriteSnapshot($$"""
+            { "scopes": [ {{scopeJson}} ] }
+            """);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidDataException>(() => new PermissionsSourceParser().Parse(path));
+            await Assert.That(ex!.Message).Contains("contents");
+            await Assert.That(ex.Message).Contains("access value");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Test]
     [Arguments("READ")]
     [Arguments("read write")]
