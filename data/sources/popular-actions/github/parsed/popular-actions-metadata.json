@@ -48,7 +48,7 @@
     },
     {
       "fileName": "reviewdog_action-actionlint.action.yml",
-      "sha256": "sha256:09b6ee34f4b390c3d6d4fd7d9c34c989a3789f6d83274c8b7aef6ca4daaff8fb"
+      "sha256": "sha256:cad4982b5e9d72ce58d20c69d208c6f7be9744d17f769f7c70555e6c43bc8f12"
     },
     {
       "fileName": "rhysd_action-setup-vim.action.yml",
