@@ -5,7 +5,7 @@
   "rawSources": [
     {
       "fileName": "github-token-available-permissions.md",
-      "sha256": "sha256:c9f02c68d2fc22deb1824f5dc08a21c43e096ce386751d9ba42a31c98c2b9f49"
+      "sha256": "sha256:f33d4c386b317098612b0a6ac15e0cf8a3a66d585001bccd0e69bdc607332d33"
     }
   ],
   "scopes": [
@@ -77,13 +77,6 @@
       "allowed": [
         "read",
         "write",
-        "none"
-      ]
-    },
-    {
-      "name": "models",
-      "allowed": [
-        "read",
         "none"
       ]
     },

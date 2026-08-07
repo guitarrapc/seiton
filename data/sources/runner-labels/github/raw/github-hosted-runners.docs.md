@@ -253,7 +253,7 @@ The job timeout for single-CPU runners is 15 minutes. If a job reaches this limi
 
 Larger runners are available for organizations and enterprises on GitHub Team and GitHub Enterprise Cloud plans.
 
-Larger runners are managed virtual machines with more resources than [standard GitHub-hosted runners](/en/actions/concepts/runners/github-hosted-runners#supported-runners-and-hardware-resources). They offer the following advanced features:
+Larger runners are managed virtual machines with more resources than [standard GitHub-hosted runners](/en/actions/reference/runners/github-hosted-runners#supported-runners-and-hardware-resources). They offer the following advanced features:
 
 * More RAM, CPU, and disk space
 * Static IP addresses
@@ -358,6 +358,7 @@ release-assets.githubusercontent.com
 
 ```shell copy
 api.snapcraft.io
+*.core.windows.net
 ```
 
 ## File systems
