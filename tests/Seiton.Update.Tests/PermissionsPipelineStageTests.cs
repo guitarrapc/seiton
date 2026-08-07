@@ -1,4 +1,5 @@
-using System.Text.Json;
+﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 using Seiton.Update.Sources;
 
 namespace Seiton.Update.Tests;
@@ -47,18 +48,13 @@ public sealed class PermissionsPipelineStageTests
         {
             var fetcher = new GitHubPermissionsFetcher();
             fetcher.ParseLocalSourceFiles(tempRepo);
-            fetcher.MergeParsedSources(tempRepo);
 
+            // Simulate the docs table not listing the scope, whether or not GitHub re-adds it later.
             var parsedPath = Path.Combine(
                 tempRepo, "data", "sources", "permissions", "github", "parsed", "permissions-scopes.json");
-            using var parsedDoc = JsonDocument.Parse(File.ReadAllText(parsedPath));
-            var parsedNames = parsedDoc.RootElement.GetProperty("scopes")
-                .EnumerateArray()
-                .Select(static s => s.GetProperty("name").GetString())
-                .ToArray();
+            RemoveScopeFromParsed(parsedPath, "models");
 
-            // Precondition: the docs source no longer lists the scope.
-            await Assert.That(parsedNames).DoesNotContain("models");
+            fetcher.MergeParsedSources(tempRepo);
 
             var mergedPath = Path.Combine(
                 tempRepo, "data", "sources", "permissions", "github", "permissions.json");
@@ -82,6 +78,69 @@ public sealed class PermissionsPipelineStageTests
         {
             Directory.Delete(tempRepo, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Deprecation is a property of the scope, not of the compat injection: if the docs table
+    /// lists a retired scope again, the merge stage must still mark it deprecated instead of
+    /// silently turning the <c>deprecated-permissions</c> rule into a no-op.
+    /// </summary>
+    [Test]
+    public async Task MergeParsedSources_RetiredScopeAlsoListedInDocs_KeepsDeprecationNote()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRawOnly(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubPermissionsFetcher();
+            fetcher.ParseLocalSourceFiles(tempRepo);
+
+            // Simulate the docs table listing 'models' again. Removing first keeps this a
+            // single-entry setup even after GitHub really re-adds the scope.
+            var parsedPath = Path.Combine(
+                tempRepo, "data", "sources", "permissions", "github", "parsed", "permissions-scopes.json");
+            var parsedNode = RemoveScopeFromParsed(parsedPath, "models");
+            parsedNode["scopes"]!.AsArray().Add(new JsonObject
+            {
+                ["name"] = "models",
+                ["allowed"] = new JsonArray("read", "none"),
+            });
+            File.WriteAllText(parsedPath, parsedNode.ToJsonString());
+
+            fetcher.MergeParsedSources(tempRepo);
+
+            var mergedPath = Path.Combine(
+                tempRepo, "data", "sources", "permissions", "github", "permissions.json");
+            using var mergedDoc = JsonDocument.Parse(File.ReadAllText(mergedPath));
+            var models = mergedDoc.RootElement.GetProperty("scopes")
+                .EnumerateArray()
+                .Single(static s => s.GetProperty("name").GetString() == "models");
+
+            await Assert.That(models.TryGetProperty("deprecationNote", out var note)).IsTrue();
+            await Assert.That(note.GetString()).Contains("remove it from permissions");
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    /// <summary>Drops a scope from a parsed snapshot and rewrites the file. Returns the parsed node.</summary>
+    private static JsonNode RemoveScopeFromParsed(string parsedPath, string scopeName)
+    {
+        var parsedNode = JsonNode.Parse(File.ReadAllText(parsedPath))!;
+        var scopes = parsedNode["scopes"]!.AsArray();
+        for (var i = scopes.Count - 1; i >= 0; i--)
+        {
+            if (scopes[i]!["name"]!.GetValue<string>() == scopeName)
+            {
+                scopes.RemoveAt(i);
+            }
+        }
+
+        File.WriteAllText(parsedPath, parsedNode.ToJsonString());
+        return parsedNode;
     }
 
     private static string CreateTempRepoWithRawOnly(string repoRoot)

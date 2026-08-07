@@ -2813,7 +2813,7 @@ jobs:
 **When fixing:**
 
 - Removing the last remaining scope leaves an empty `permissions:` mapping, which is invalid. Delete the whole `permissions:` block or keep at least one active scope.
-- The retired scope list is generated from `data/sources/permissions/github/permissions.json`; a scope only becomes deprecated here after GitHub retires it, not when it merely disappears from the docs table.
+- The retired scope list is generated from `data/sources/permissions/github/permissions.json`; a scope only becomes deprecated after GitHub retires it, not when it merely disappears from the docs table. Retired scopes stay valid for [`permissions`](#permissions) because GitHub Actions still accepts them.
 
 ---
 

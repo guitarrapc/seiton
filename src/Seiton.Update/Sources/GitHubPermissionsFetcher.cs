@@ -24,13 +24,22 @@ internal sealed class GitHubPermissionsFetcher
     /// Scopes absent from the GitHub Docs table that GitHub Actions still accepts in a workflow.
     /// Keeping them known avoids reporting "unknown permission scope" for workflows that still declare them.
     /// </summary>
-    private static readonly (string Name, string[] Allowed, string Reason, string? DeprecationNote)[] CompatScopes =
+    private static readonly (string Name, string[] Allowed, string Reason)[] CompatScopes =
     [
-        ("repository-projects", ["read", "write", "none"], "actionlint compatibility", null),
+        ("repository-projects", ["read", "write", "none"], "actionlint compatibility"),
         // GitHub Models was retired on 2026-07-30 and the docs table dropped the scope,
         // but workflows declaring it still run without error.
-        ("models", ["read", "none"], "retired scope compatibility",
-            "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/"),
+        ("models", ["read", "none"], "retired scope compatibility"),
+    ];
+
+    /// <summary>
+    /// Notes for scopes GitHub has retired, applied whether the scope came from the docs table or
+    /// from <see cref="CompatScopes"/>. Deprecation is a property of the scope, not of the injection:
+    /// a scope reappearing in the docs table must not silently lose its note.
+    /// </summary>
+    private static readonly (string Name, string Note)[] DeprecatedScopes =
+    [
+        ("models", "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/"),
     ];
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -135,12 +144,29 @@ internal sealed class GitHubPermissionsFetcher
             .ToList();
 
         // Add scopes the docs table no longer lists but GitHub Actions still accepts
-        foreach (var (name, allowed, reason, deprecationNote) in CompatScopes)
+        foreach (var (name, allowed, reason) in CompatScopes)
         {
             if (!scopes.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)))
             {
-                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed], DeprecationNote = deprecationNote });
+                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed] });
                 UpdateLogger.Info($"[merge:permissions:sources] added '{name}' from {reason}");
+            }
+        }
+
+        // Mark retired scopes regardless of whether they came from docs or from the compat list
+        foreach (var (name, note) in DeprecatedScopes)
+        {
+            var matches = scopes.Where(s => string.Equals(s.Name, name, StringComparison.Ordinal)).ToArray();
+            if (matches.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Deprecated permission scope '{name}' is not present in the merged snapshot. " +
+                    "Add it to CompatScopes or remove it from DeprecatedScopes.");
+            }
+
+            foreach (var scope in matches)
+            {
+                scope.DeprecationNote = note;
             }
         }
 
