@@ -1,9 +1,10 @@
 ﻿using System.Text.Json;
+using System.Text.RegularExpressions;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Parsers;
 
-internal sealed class PermissionsSourceParser
+internal sealed partial class PermissionsSourceParser
 {
     public PermissionsModel Parse(string path)
     {
@@ -25,8 +26,39 @@ internal sealed class PermissionsSourceParser
             throw new InvalidDataException($"Permissions source is invalid or empty: {path}");
         }
 
-        var scopes = snapshot.Scopes
+        var entries = snapshot.Scopes
             .Where(static s => !string.IsNullOrWhiteSpace(s.Name))
+            .ToArray();
+
+        // This snapshot is the codegen input: names and access values are emitted verbatim into
+        // C# literals (including "..."u8), and a repeated name becomes a duplicate switch label.
+        foreach (var entry in entries)
+        {
+            if (!ScopeNameRegex().IsMatch(entry.Name!))
+            {
+                throw new InvalidDataException(
+                    $"Invalid permission scope name '{entry.Name}' in {path}. Expected lowercase kebab-case.");
+            }
+
+            foreach (var value in entry.Allowed ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(value) && !AccessValueRegex().IsMatch(value))
+                {
+                    throw new InvalidDataException(
+                        $"Invalid access value '{value}' for permission scope '{entry.Name}' in {path}. Expected lowercase letters.");
+                }
+            }
+        }
+
+        var duplicate = entries
+            .GroupBy(static s => s.Name!, StringComparer.Ordinal)
+            .FirstOrDefault(static g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw new InvalidDataException($"Duplicate permission scope '{duplicate.Key}' in {path}.");
+        }
+
+        var scopes = entries
             .OrderBy(static s => s.Name, StringComparer.Ordinal)
             .Select(static s => new PermissionScopeModel(
                 s.Name!,
@@ -36,6 +68,12 @@ internal sealed class PermissionsSourceParser
 
         return new PermissionsModel(scopes);
     }
+
+    [GeneratedRegex(@"^[a-z][a-z0-9\-]*$")]
+    private static partial Regex ScopeNameRegex();
+
+    [GeneratedRegex(@"^[a-z]+$")]
+    private static partial Regex AccessValueRegex();
 
     private sealed class PermissionsSnapshot
     {

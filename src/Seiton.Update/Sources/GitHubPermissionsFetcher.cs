@@ -138,10 +138,31 @@ internal sealed class GitHubPermissionsFetcher
         var parsed = JsonSerializer.Deserialize<ParsedPermissionsSnapshot>(parsedText, JsonOptions)
             ?? throw new InvalidOperationException("Failed to deserialize parsed permissions snapshot");
 
-        // Build the merged model: start from parsed docs data
-        var scopes = parsed.Scopes
-            .Select(s => new MergedScope { Name = s.Name, Allowed = s.Allowed })
-            .ToList();
+        // Build the merged model: start from parsed docs data, collapsing repeated scopes.
+        // The docs table is rendered from Liquid conditionals, so one scope can appear on
+        // several lines; conflicting access values are ambiguous and must not be guessed.
+        var scopes = new List<MergedScope>();
+        foreach (var group in parsed.Scopes.GroupBy(static s => s.Name, StringComparer.Ordinal))
+        {
+            var first = group.First();
+            foreach (var other in group.Skip(1))
+            {
+                if (!other.Allowed.SequenceEqual(first.Allowed, StringComparer.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"Permission scope '{group.Key}' appears in {paths.ParsedPath} with conflicting access values: " +
+                        $"[{string.Join(", ", first.Allowed)}] and [{string.Join(", ", other.Allowed)}].");
+                }
+            }
+
+            var duplicates = group.Count() - 1;
+            if (duplicates > 0)
+            {
+                UpdateLogger.Info($"[merge:permissions:sources] collapsed {duplicates} duplicate entr{(duplicates == 1 ? "y" : "ies")} for '{group.Key}'");
+            }
+
+            scopes.Add(new MergedScope { Name = first.Name, Allowed = first.Allowed });
+        }
 
         // Add scopes the docs table no longer lists but GitHub Actions still accepts
         foreach (var (name, allowed, reason) in CompatScopes)

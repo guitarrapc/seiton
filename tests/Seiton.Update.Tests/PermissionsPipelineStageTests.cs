@@ -126,6 +126,83 @@ public sealed class PermissionsPipelineStageTests
         }
     }
 
+    /// <summary>
+    /// The docs table is rendered from Liquid conditionals, so the same scope can appear twice.
+    /// Passing duplicates through would emit duplicate switch labels in the generated file.
+    /// </summary>
+    [Test]
+    public async Task MergeParsedSources_DuplicateScopeInDocs_CollapsesToSingleEntry()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRawOnly(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubPermissionsFetcher();
+            fetcher.ParseLocalSourceFiles(tempRepo);
+
+            var parsedPath = Path.Combine(
+                tempRepo, "data", "sources", "permissions", "github", "parsed", "permissions-scopes.json");
+            var parsedNode = JsonNode.Parse(File.ReadAllText(parsedPath))!;
+            parsedNode["scopes"]!.AsArray().Add(new JsonObject
+            {
+                ["name"] = "contents",
+                ["allowed"] = new JsonArray("read", "write", "none"),
+            });
+            File.WriteAllText(parsedPath, parsedNode.ToJsonString());
+
+            fetcher.MergeParsedSources(tempRepo);
+
+            var mergedPath = Path.Combine(
+                tempRepo, "data", "sources", "permissions", "github", "permissions.json");
+            using var mergedDoc = JsonDocument.Parse(File.ReadAllText(mergedPath));
+            var contents = mergedDoc.RootElement.GetProperty("scopes")
+                .EnumerateArray()
+                .Where(static s => s.GetProperty("name").GetString() == "contents")
+                .ToArray();
+
+            await Assert.That(contents).Count().IsEqualTo(1);
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Two entries for one scope with different access values are ambiguous: picking either one
+    /// silently changes what the linter accepts, so the merge must fail instead.
+    /// </summary>
+    [Test]
+    public async Task MergeParsedSources_ConflictingDuplicateScope_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRawOnly(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubPermissionsFetcher();
+            fetcher.ParseLocalSourceFiles(tempRepo);
+
+            var parsedPath = Path.Combine(
+                tempRepo, "data", "sources", "permissions", "github", "parsed", "permissions-scopes.json");
+            var parsedNode = JsonNode.Parse(File.ReadAllText(parsedPath))!;
+            parsedNode["scopes"]!.AsArray().Add(new JsonObject
+            {
+                ["name"] = "contents",
+                ["allowed"] = new JsonArray("read", "none"),
+            });
+            File.WriteAllText(parsedPath, parsedNode.ToJsonString());
+
+            var ex = Assert.Throws<InvalidDataException>(() => fetcher.MergeParsedSources(tempRepo));
+            await Assert.That(ex!.Message).Contains("contents");
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
     /// <summary>Drops a scope from a parsed snapshot and rewrites the file. Returns the parsed node.</summary>
     private static JsonNode RemoveScopeFromParsed(string parsedPath, string scopeName)
     {
