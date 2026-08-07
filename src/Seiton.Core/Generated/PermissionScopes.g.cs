@@ -89,4 +89,18 @@ internal static class PermissionScopes
             _ => null,
         };
     }
+
+    /// <summary>
+    /// Returns the deprecation note for a scope GitHub has retired but still accepts,
+    /// or null when the scope is active or unknown.
+    /// </summary>
+    internal static string? GetDeprecationNote(ReadOnlySpan<byte> scopeNameUtf8)
+    {
+        if (scopeNameUtf8.SequenceEqual("models"u8))
+        {
+            return "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/";
+        }
+
+        return null;
+    }
 }

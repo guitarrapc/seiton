@@ -30,7 +30,8 @@ internal sealed class PermissionsSourceParser
             .OrderBy(static s => s.Name, StringComparer.Ordinal)
             .Select(static s => new PermissionScopeModel(
                 s.Name!,
-                (s.Allowed ?? []).Where(static v => !string.IsNullOrWhiteSpace(v)).ToArray()))
+                (s.Allowed ?? []).Where(static v => !string.IsNullOrWhiteSpace(v)).ToArray(),
+                string.IsNullOrWhiteSpace(s.DeprecationNote) ? null : s.DeprecationNote))
             .ToArray();
 
         return new PermissionsModel(scopes);
@@ -45,5 +46,6 @@ internal sealed class PermissionsSourceParser
     {
         public string? Name { get; set; }
         public List<string>? Allowed { get; set; }
+        public string? DeprecationNote { get; set; }
     }
 }

@@ -78,7 +78,7 @@ public sealed partial class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(59);
+        await Assert.That(rules.Length).IsEqualTo(60);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);

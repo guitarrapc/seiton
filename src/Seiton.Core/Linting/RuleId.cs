@@ -65,6 +65,7 @@ public enum RuleId
     BotConditions,
     Artipacked,
     BackgroundSteps,
+    DeprecatedPermissions,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

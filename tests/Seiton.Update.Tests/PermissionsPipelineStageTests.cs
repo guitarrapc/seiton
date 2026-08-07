@@ -73,6 +73,10 @@ public sealed class PermissionsPipelineStageTests
                 .ToArray();
 
             await Assert.That(allowed).IsEquivalentTo(new[] { "read", "none" });
+
+            // The note drives the deprecated-permissions diagnostic message.
+            var note = models.GetProperty("deprecationNote").GetString();
+            await Assert.That(note).Contains("remove it from permissions");
         }
         finally
         {

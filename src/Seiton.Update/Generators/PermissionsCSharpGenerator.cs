@@ -76,8 +76,32 @@ internal sealed class PermissionsCSharpGenerator
         sb.AppendLine("            _ => null,");
         sb.AppendLine("        };");
         sb.AppendLine("    }");
+        sb.AppendLine();
+
+        // GetDeprecationNote method — UTF-8 span based, so active scopes cost no string materialization
+        var deprecated = scopes.Where(static s => s.DeprecationNote is not null).ToArray();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Returns the deprecation note for a scope GitHub has retired but still accepts,");
+        sb.AppendLine("    /// or null when the scope is active or unknown.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    internal static string? GetDeprecationNote(ReadOnlySpan<byte> scopeNameUtf8)");
+        sb.AppendLine("    {");
+        foreach (var scope in deprecated)
+        {
+            sb.AppendLine($"        if (scopeNameUtf8.SequenceEqual(\"{scope.Name}\"u8))");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            return \"{EscapeCSharpString(scope.DeprecationNote!)}\";");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("        return null;");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
 
         return TextNormalization.NormalizeToLf(sb.ToString());
     }
+
+    private static string EscapeCSharpString(string value)
+        => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
 }

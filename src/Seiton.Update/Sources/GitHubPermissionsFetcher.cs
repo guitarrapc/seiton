@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -23,12 +24,13 @@ internal sealed class GitHubPermissionsFetcher
     /// Scopes absent from the GitHub Docs table that GitHub Actions still accepts in a workflow.
     /// Keeping them known avoids reporting "unknown permission scope" for workflows that still declare them.
     /// </summary>
-    private static readonly (string Name, string[] Allowed, string Reason)[] CompatScopes =
+    private static readonly (string Name, string[] Allowed, string Reason, string? DeprecationNote)[] CompatScopes =
     [
-        ("repository-projects", ["read", "write", "none"], "actionlint compatibility"),
+        ("repository-projects", ["read", "write", "none"], "actionlint compatibility", null),
         // GitHub Models was retired on 2026-07-30 and the docs table dropped the scope,
         // but workflows declaring it still run without error.
-        ("models", ["read", "none"], "retired scope compatibility"),
+        ("models", ["read", "none"], "retired scope compatibility",
+            "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/"),
     ];
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -133,11 +135,11 @@ internal sealed class GitHubPermissionsFetcher
             .ToList();
 
         // Add scopes the docs table no longer lists but GitHub Actions still accepts
-        foreach (var (name, allowed, reason) in CompatScopes)
+        foreach (var (name, allowed, reason, deprecationNote) in CompatScopes)
         {
             if (!scopes.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)))
             {
-                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed] });
+                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed], DeprecationNote = deprecationNote });
                 UpdateLogger.Info($"[merge:permissions:sources] added '{name}' from {reason}");
             }
         }
@@ -205,5 +207,9 @@ internal sealed class GitHubPermissionsFetcher
     {
         public string Name { get; set; } = string.Empty;
         public List<string> Allowed { get; set; } = [];
+
+        /// <summary>Set only for retired scopes; omitted from the snapshot for active scopes.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DeprecationNote { get; set; }
     }
 }
