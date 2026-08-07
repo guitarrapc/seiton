@@ -19,6 +19,18 @@ internal sealed class GitHubPermissionsFetcher
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    /// <summary>
+    /// Scopes absent from the GitHub Docs table that GitHub Actions still accepts in a workflow.
+    /// Keeping them known avoids reporting "unknown permission scope" for workflows that still declare them.
+    /// </summary>
+    private static readonly (string Name, string[] Allowed, string Reason)[] CompatScopes =
+    [
+        ("repository-projects", ["read", "write", "none"], "actionlint compatibility"),
+        // GitHub Models was retired on 2026-07-30 and the docs table dropped the scope,
+        // but workflows declaring it still run without error.
+        ("models", ["read", "none"], "retired scope compatibility"),
+    ];
+
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
     {
         await FetchSourceFilesAsync(repoRoot);
@@ -120,11 +132,14 @@ internal sealed class GitHubPermissionsFetcher
             .Select(s => new MergedScope { Name = s.Name, Allowed = s.Allowed })
             .ToList();
 
-        // Add repository-projects from actionlint compatibility if not present in docs
-        if (!scopes.Any(s => string.Equals(s.Name, "repository-projects", StringComparison.Ordinal)))
+        // Add scopes the docs table no longer lists but GitHub Actions still accepts
+        foreach (var (name, allowed, reason) in CompatScopes)
         {
-            scopes.Add(new MergedScope { Name = "repository-projects", Allowed = ["read", "write", "none"] });
-            UpdateLogger.Info("[merge:permissions:sources] added 'repository-projects' from actionlint compatibility");
+            if (!scopes.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)))
+            {
+                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed] });
+                UpdateLogger.Info($"[merge:permissions:sources] added '{name}' from {reason}");
+            }
         }
 
         // Sort alphabetically

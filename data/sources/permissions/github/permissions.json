@@ -81,6 +81,13 @@
       ]
     },
     {
+      "name": "models",
+      "allowed": [
+        "read",
+        "none"
+      ]
+    },
+    {
       "name": "packages",
       "allowed": [
         "read",

@@ -21,6 +21,7 @@ internal static class PermissionScopes
         "discussions",
         "id-token",
         "issues",
+        "models",
         "packages",
         "pages",
         "pull-requests",
@@ -31,7 +32,7 @@ internal static class PermissionScopes
     ];
 
     /// <summary>Pre-formatted list of all scope names for error messages.</summary>
-    internal static readonly string AllScopesList = "\"actions\", \"artifact-metadata\", \"attestations\", \"checks\", \"code-quality\", \"contents\", \"deployments\", \"discussions\", \"id-token\", \"issues\", \"packages\", \"pages\", \"pull-requests\", \"repository-projects\", \"security-events\", \"statuses\", \"vulnerability-alerts\"";
+    internal static readonly string AllScopesList = "\"actions\", \"artifact-metadata\", \"attestations\", \"checks\", \"code-quality\", \"contents\", \"deployments\", \"discussions\", \"id-token\", \"issues\", \"models\", \"packages\", \"pages\", \"pull-requests\", \"repository-projects\", \"security-events\", \"statuses\", \"vulnerability-alerts\"";
 
     internal static bool IsKnownScope(string name)
     {
@@ -47,6 +48,7 @@ internal static class PermissionScopes
             "discussions" => true,
             "id-token" => true,
             "issues" => true,
+            "models" => true,
             "packages" => true,
             "pages" => true,
             "pull-requests" => true,
@@ -82,6 +84,7 @@ internal static class PermissionScopes
             "security-events" => ["read", "write", "none"],
             "statuses" => ["read", "write", "none"],
             "id-token" => ["write", "none"],
+            "models" => ["read", "none"],
             "vulnerability-alerts" => ["read", "none"],
             _ => null,
         };
