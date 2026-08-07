@@ -80,6 +80,7 @@ internal static class RuleCatalog
         (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
         (RuleId.CheckoutUnsafePr, 61, false, static () => new CheckoutUnsafePrRule()),
         (RuleId.BackgroundSteps, 62, false, static () => new BackgroundStepsRule()),
+        (RuleId.DeprecatedPermissions, 63, false, static () => new DeprecatedPermissionsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -319,6 +320,7 @@ internal static class RuleCatalog
         RuleId.BotConditions => "mixed",
         RuleId.Artipacked => "mixed",
         RuleId.BackgroundSteps => "mixed",
+        RuleId.DeprecatedPermissions => "warning",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 

@@ -285,6 +285,7 @@ The current default rule scope in C# is:
 | `job-structure` | — |
 | `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for `./` and `$/` contract validation. Enforces `$/.github/workflows/{filename}` and rejects `$/` when GHES is configured. |
 | `permissions` | — |
+| `deprecated-permissions` | Retired-scope notes come from `PermissionScopes.GetDeprecationNote` (generated from `data/sources/permissions/github/permissions.json`); lookup is UTF-8 span based so active scopes materialize no strings. |
 | `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
 | `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
 | `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath`; on GitHub.com valid `$/` resolves from the repository root and is excluded from remote pinning checks. Invalid containment and configured-GHES cases receive explicit diagnostics. |

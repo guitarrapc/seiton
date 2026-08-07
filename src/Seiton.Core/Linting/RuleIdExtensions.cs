@@ -73,6 +73,7 @@ internal static class RuleIdExtensions
         RuleId.BotConditions => "bot-conditions",
         RuleId.Artipacked => "artipacked",
         RuleId.BackgroundSteps => "background-steps",
+        RuleId.DeprecatedPermissions => "deprecated-permissions",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };

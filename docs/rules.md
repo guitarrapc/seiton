@@ -71,12 +71,13 @@ bot-conditions                           yes       local    mixed      no    wor
 artipacked                               yes       local    mixed      no    workflow   default
 checkout-unsafe-pr                       yes       local    warning    yes   both       default
 background-steps                         yes       local    mixed      no    workflow   default
+deprecated-permissions                   yes       local    warning    no    both       default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
 stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
 
-63 rules total (58 enabled, 5 disabled)
+64 rules total (59 enabled, 5 disabled)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
@@ -158,6 +159,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [secrets-outside-env](#secrets-outside-env)
 - [overprovisioned-secrets](#overprovisioned-secrets)
 - [deny-inherit-secrets](#deny-inherit-secrets)
+- [deprecated-permissions](#deprecated-permissions)
 
 ### Supply Chain
 
@@ -2768,6 +2770,50 @@ jobs:
 - Enumerate only required secret keys based on the callee workflow contract.
 - After replacing `inherit`, test all called workflow paths to catch missing secret mappings early.
 - Keep secret key names explicit and stable to make cross-workflow review auditable.
+
+---
+
+### `deprecated-permissions`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Warns when `permissions:` declares a scope GitHub has retired. Retired scopes are still accepted by GitHub Actions, so `permissions` keeps validating their values; this rule reports them separately so they can be removed.
+
+**Why:** A retired scope grants nothing. Leaving it in place misrepresents the job's actual token permissions during review and hides the fact that the underlying feature is gone.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    permissions:
+      contents: read
+      models: read            # WARNING: permission scope "models" was deprecated
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
+
+**Remediation:** Drop the retired scope:
+
+```yaml
+on: push
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
+
+**When fixing:**
+
+- Removing the last remaining scope leaves an empty `permissions:` mapping, which is invalid. Delete the whole `permissions:` block or keep at least one active scope.
+- The retired scope list is generated from `data/sources/permissions/github/permissions.json`; a scope only becomes deprecated after GitHub retires it, not when it merely disappears from the docs table. Retired scopes stay valid for [`permissions`](#permissions) because GitHub Actions still accepts them.
 
 ---
 

@@ -81,6 +81,14 @@
       ]
     },
     {
+      "name": "models",
+      "allowed": [
+        "read",
+        "none"
+      ],
+      "deprecationNote": "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/"
+    },
+    {
       "name": "packages",
       "allowed": [
         "read",

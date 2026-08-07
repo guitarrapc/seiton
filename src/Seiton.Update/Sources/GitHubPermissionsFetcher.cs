@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -18,6 +19,28 @@ internal sealed class GitHubPermissionsFetcher
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    /// <summary>
+    /// Scopes absent from the GitHub Docs table that GitHub Actions still accepts in a workflow.
+    /// Keeping them known avoids reporting "unknown permission scope" for workflows that still declare them.
+    /// </summary>
+    private static readonly (string Name, string[] Allowed, string Reason)[] CompatScopes =
+    [
+        ("repository-projects", ["read", "write", "none"], "actionlint compatibility"),
+        // GitHub Models was retired on 2026-07-30 and the docs table dropped the scope,
+        // but workflows declaring it still run without error.
+        ("models", ["read", "none"], "retired scope compatibility"),
+    ];
+
+    /// <summary>
+    /// Notes for scopes GitHub has retired, applied whether the scope came from the docs table or
+    /// from <see cref="CompatScopes"/>. Deprecation is a property of the scope, not of the injection:
+    /// a scope reappearing in the docs table must not silently lose its note.
+    /// </summary>
+    private static readonly (string Name, string Note)[] DeprecatedScopes =
+    [
+        ("models", "GitHub Models is retired and the scope has no effect. remove it from permissions: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/"),
+    ];
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
     {
@@ -115,16 +138,57 @@ internal sealed class GitHubPermissionsFetcher
         var parsed = JsonSerializer.Deserialize<ParsedPermissionsSnapshot>(parsedText, JsonOptions)
             ?? throw new InvalidOperationException("Failed to deserialize parsed permissions snapshot");
 
-        // Build the merged model: start from parsed docs data
-        var scopes = parsed.Scopes
-            .Select(s => new MergedScope { Name = s.Name, Allowed = s.Allowed })
-            .ToList();
-
-        // Add repository-projects from actionlint compatibility if not present in docs
-        if (!scopes.Any(s => string.Equals(s.Name, "repository-projects", StringComparison.Ordinal)))
+        // Build the merged model: start from parsed docs data, collapsing repeated scopes.
+        // The docs table is rendered from Liquid conditionals, so one scope can appear on
+        // several lines; conflicting access values are ambiguous and must not be guessed.
+        var scopes = new List<MergedScope>();
+        foreach (var group in parsed.Scopes.GroupBy(static s => s.Name, StringComparer.Ordinal))
         {
-            scopes.Add(new MergedScope { Name = "repository-projects", Allowed = ["read", "write", "none"] });
-            UpdateLogger.Info("[merge:permissions:sources] added 'repository-projects' from actionlint compatibility");
+            var first = group.First();
+            foreach (var other in group.Skip(1))
+            {
+                if (!other.Allowed.SequenceEqual(first.Allowed, StringComparer.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"Permission scope '{group.Key}' appears in {paths.ParsedPath} with conflicting access values: " +
+                        $"[{string.Join(", ", first.Allowed)}] and [{string.Join(", ", other.Allowed)}].");
+                }
+            }
+
+            var duplicates = group.Count() - 1;
+            if (duplicates > 0)
+            {
+                UpdateLogger.Info($"[merge:permissions:sources] collapsed {duplicates} duplicate entr{(duplicates == 1 ? "y" : "ies")} for '{group.Key}'");
+            }
+
+            scopes.Add(new MergedScope { Name = first.Name, Allowed = first.Allowed });
+        }
+
+        // Add scopes the docs table no longer lists but GitHub Actions still accepts
+        foreach (var (name, allowed, reason) in CompatScopes)
+        {
+            if (!scopes.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)))
+            {
+                scopes.Add(new MergedScope { Name = name, Allowed = [.. allowed] });
+                UpdateLogger.Info($"[merge:permissions:sources] added '{name}' from {reason}");
+            }
+        }
+
+        // Mark retired scopes regardless of whether they came from docs or from the compat list
+        foreach (var (name, note) in DeprecatedScopes)
+        {
+            var matches = scopes.Where(s => string.Equals(s.Name, name, StringComparison.Ordinal)).ToArray();
+            if (matches.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Deprecated permission scope '{name}' is not present in the merged snapshot. " +
+                    "Add it to CompatScopes or remove it from DeprecatedScopes.");
+            }
+
+            foreach (var scope in matches)
+            {
+                scope.DeprecationNote = note;
+            }
         }
 
         // Sort alphabetically
@@ -190,5 +254,9 @@ internal sealed class GitHubPermissionsFetcher
     {
         public string Name { get; set; } = string.Empty;
         public List<string> Allowed { get; set; } = [];
+
+        /// <summary>Set only for retired scopes; omitted from the snapshot for active scopes.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DeprecationNote { get; set; }
     }
 }

@@ -170,6 +170,7 @@ Column definitions:
 | `reusable-workflow` | ✓ | — | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs reject incompatible execution keys, and `./` or `$/` same-repository calls validate contracts when statically resolvable. The `$/` form must be `$/.github/workflows/{filename}` and is rejected for GHES targets. |
 | `local-action-inputs` | ✓ | — | Validate `./`, `../`, or `$/` local action `with:` inputs against parsed `action.yml`/`action.yaml`: unknown/missing/deprecated inputs, `runs.using` values, deprecated runners, description presence, env constraints, JS entry-point existence, and branding forwarding. |
 | `permissions` | ✓ | — | Validate `permissions` value domain (scalar: `read-all`/`write-all`; scopes: `read`/`write`/`none`). Warn on scalar values recommending explicit per-scope mapping. |
+| `deprecated-permissions` | ✓ | — | Warn when `permissions` declares a scope GitHub has retired. Retired scopes stay valid for `permissions` because GitHub Actions still accepts them; this rule prompts their removal. |
 | `popular-action-inputs` | ✓ | — | Validate known action input names against popular-action metadata. Suggest near-matches via edit distance. |
 | `outdated-action-runner` | ✓ | — | Error when a popular action's `runs.using` runtime is deprecated (catalog-driven, checks against maintained deprecated-runtime set). |
 | `unpinned-uses` | ✓ | — | Warn when remote `uses:` is not pinned to a full commit SHA; on GitHub.com accept `$/` self-repository references as implicitly bound to the running commit and validate local action resolvability. Reject `$/` for GHES targets and diagnose invalid repository-escaping paths. |
@@ -412,6 +413,7 @@ The following table defines the normative default severity for each rule. Implem
 | `reusable-workflow` | error | |
 | `local-action-inputs` | mixed | error (invalid/missing inputs, invalid metadata), warning (deprecated inputs) |
 | `permissions` | mixed | error (invalid values), warning (overly-broad valid scalars) |
+| `deprecated-permissions` | warning | |
 | `popular-action-inputs` | warning | |
 | `outdated-action-runner` | error | |
 | `unpinned-uses` | mixed | error (invalid Docker ref format), warning (unpinned SHA), info (ignored-action verbose) |
@@ -1155,6 +1157,7 @@ The following table classifies each default rule by fix feasibility.
 | `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
 | `dangerous-triggers` | ✗ Not auto-fixable | Correct replacement is semantic (remove event, or restructure trigger) and context-dependent. |
 | `permissions` | ✗ Not auto-fixable | Correct value is context-dependent; `deny-write-all` / `deny-read-all` handle the scalar form. |
+| `deprecated-permissions` | ✗ Not auto-fixable | Deleting the last scope leaves an invalid empty `permissions` mapping; whether to drop the whole block is user intent. |
 | `job-structure` | ✗ Not auto-fixable | Structural problems (missing `runs-on`, conflicting keys) require user intent to resolve. |
 | `reusable-workflow` | ✗ Not auto-fixable | Forbidden key removal requires user to confirm intent. |
 | `popular-action-inputs` | △ Partial | When a unique closest input name is found (unambiguous Levenshtein match within threshold), replace the unknown input key with the suggested name. No fix is attached when no suggestion is found or when the match would be ambiguous. |

@@ -33,11 +33,10 @@ internal sealed class PermissionsCSharpGenerator
         // AllScopesList pre-formatted string for error messages
         sb.Append("    /// <summary>Pre-formatted list of all scope names for error messages.</summary>");
         sb.AppendLine();
-        var quotedNames = scopes.Select(static s => $"\\\"" + s.Name + "\\\"").ToArray();
         sb.AppendLine($"    internal static readonly string AllScopesList = \"{string.Join(", ", scopes.Select(static s => "\\\"" + s.Name + "\\\""))}\";");
         sb.AppendLine();
 
-        // IsKnownScope method — UTF-8 span based for parser hot paths
+        // IsKnownScope method — string switch, called with a decoded scope name
         sb.AppendLine("    internal static bool IsKnownScope(string name)");
         sb.AppendLine("    {");
         sb.AppendLine("        return name switch");
@@ -76,8 +75,67 @@ internal sealed class PermissionsCSharpGenerator
         sb.AppendLine("            _ => null,");
         sb.AppendLine("        };");
         sb.AppendLine("    }");
+        sb.AppendLine();
+
+        // GetDeprecationNote method — UTF-8 span based, so active scopes cost no string materialization
+        var deprecated = scopes.Where(static s => s.DeprecationNote is not null).ToArray();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Returns the deprecation note for a scope GitHub has retired but still accepts,");
+        sb.AppendLine("    /// or null when the scope is active or unknown.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    internal static string? GetDeprecationNote(ReadOnlySpan<byte> scopeNameUtf8)");
+        sb.AppendLine("    {");
+        foreach (var scope in deprecated)
+        {
+            sb.AppendLine($"        if (scopeNameUtf8.SequenceEqual(\"{scope.Name}\"u8))");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            return \"{EscapeCSharpString(scope.DeprecationNote!)}\";");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("        return null;");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
 
         return TextNormalization.NormalizeToLf(sb.ToString());
+    }
+
+    /// <summary>
+    /// Escapes a deprecation note for emission into a regular C# string literal. Line terminators
+    /// matter most: a raw one produces an unterminated literal, and <c>verify-permissions</c> compares
+    /// text only, so the broken file would reach the compiler unnoticed. Scope names are emitted
+    /// unescaped: every producer of the snapshot constrains them to lowercase kebab-case.
+    /// </summary>
+    private static string EscapeCSharpString(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\0': sb.Append("\\0"); break;
+                default:
+                    // NEL and the Unicode line separators are line terminators in C#; the remaining
+                    // control characters are escaped too so the emitted literal stays readable.
+                    if (char.IsControl(c) || c == '\u2028' || c == '\u2029')
+                    {
+                        sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
+
+                    break;
+            }
+        }
+
+        return sb.ToString();
     }
 }

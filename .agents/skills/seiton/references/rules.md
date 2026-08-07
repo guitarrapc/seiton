@@ -90,6 +90,7 @@ rules:
 | bot-conditions | mixed | no | workflow | on |
 | artipacked | mixed | no | workflow | on |
 | background-steps | mixed | no | workflow | on |
+| deprecated-permissions | warning | no | both | on |
 | known-vulnerable-actions | error | no | workflow | opt-in |
 | impostor-commit | error | no | workflow | opt-in |
 | ref-confusion | error | no | workflow | opt-in |
@@ -133,7 +134,7 @@ Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `s
 
 ### Permissions
 
-`permissions`, `job-permissions-required`, `deny-write-all`, `deny-read-all`, `deny-inherit-secrets`, `overprovisioned-secrets`, `workflow-secrets`, `job-secrets`
+`permissions`, `job-permissions-required`, `deny-write-all`, `deny-read-all`, `deny-inherit-secrets`, `overprovisioned-secrets`, `workflow-secrets`, `job-secrets`, `deprecated-permissions`
 
 ### Correctness
 

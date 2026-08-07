@@ -78,7 +78,7 @@ public sealed partial class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(59);
+        await Assert.That(rules.Length).IsEqualTo(60);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -138,6 +138,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(rules[56].Id).IsEqualTo(RuleId.Artipacked);
         await Assert.That(rules[57].Id).IsEqualTo(RuleId.CheckoutUnsafePr);
         await Assert.That(rules[58].Id).IsEqualTo(RuleId.BackgroundSteps);
+        await Assert.That(rules[59].Id).IsEqualTo(RuleId.DeprecatedPermissions);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -198,6 +199,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("artipacked")).IsEqualTo(60);
         await Assert.That(RuleCatalog.GetPriority("checkout-unsafe-pr")).IsEqualTo(61);
         await Assert.That(RuleCatalog.GetPriority("background-steps")).IsEqualTo(62);
+        await Assert.That(RuleCatalog.GetPriority("deprecated-permissions")).IsEqualTo(63);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);

@@ -120,7 +120,7 @@ public sealed class RuleListResolverTests
     {
         var statuses = RuleListResolver.Resolve(null);
 
-        await Assert.That(statuses.Count).IsEqualTo(63);
+        await Assert.That(statuses.Count).IsEqualTo(64);
     }
 
     [Test]
