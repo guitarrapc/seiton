@@ -62,20 +62,20 @@ public sealed partial class RuleInterfaceTests
                         - run: echo ng
             """,
             ["unknown permission scope \"check\". all available permission scopes are"]),
-            // regression: models scope only allows read/none
+            // regression: models scope was retired (GitHub Models retirement) and is no longer known
             new RuleCase(
-            "ng-models-write-restricted",
+            "ng-models-retired-scope",
             """
             on: push
             jobs:
                 test:
                     permissions:
-                        models: write
+                        models: read
                     runs-on: ubuntu-latest
                     steps:
                         - run: echo ng
             """,
-            ["\"write\" is invalid as permission of scope \"models\". available values are \"read\", \"none\""]),
+            ["unknown permission scope \"models\". all available permission scopes are"]),
             // regression: id-token scope only allows write/none
             new RuleCase(
             "ng-id-token-read-restricted",
@@ -117,7 +117,6 @@ public sealed partial class RuleInterfaceTests
                         issues: none
                         packages: read
                         id-token: write
-                        models: read
                     runs-on: ubuntu-latest
                     steps:
                         - run: echo ok
