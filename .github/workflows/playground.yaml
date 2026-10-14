@@ -61,7 +61,7 @@ jobs:
           echo "- **Ref:** \`${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref || github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
